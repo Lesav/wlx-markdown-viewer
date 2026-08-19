@@ -1,25 +1,74 @@
-# Markdown Lister Plugin for Total Commander (32/64-bit version)
+# Markdown Lister Plugin for Total Commander (32/64-bit)
 
-Based on [wlx-markdown-viewer plugin](https://github.com/rg-software/wlx-markdown-viewer), 
-and upgraded for displays Markdown files via [Markdig Markdown Processor](https://github.com/xoofx/markdig), which support modern markdown syntax.
+Current release: **2.9.1**.
 
-[Markdig Markdown Processor](https://github.com/xoofx/markdig) is dotnet library, so dotnet core 8.0 is required to be installed.
+MarkdownView is based on the [wlx-markdown-viewer plugin](https://github.com/rg-software/wlx-markdown-viewer).
+Markdown files are parsed with [Markdig](https://github.com/xoofx/markdig) and displayed as a WPF
+`FlowDocument`.
 
-## Fine Tuning
+The Markdown viewer targets .NET Framework 4.8, which is included with supported Windows 10
+installations. It does not use WebView2, Internet Explorer, JavaScript or PHP, and it does not
+require a separately installed .NET/.NET Core runtime. All non-system DLLs are included in the
+plugin directory.
 
-Plugin configuration is specified in `MarkdownView.ini`. Markdown-related settings are:
- 
-- `Extensions: MarkdownExtensions` file extensions recognized by the plugin as markdown files.
+## Markdown rendering
 
-- `Renderer: Extensions` A collection of extensions for Markdig Markdown Processor. [Read to markdig extensions features block](https://github.com/xoofx/markdig/blob/master/readme.md)  
-  Follow extensions are supported: common, advanced, alerts, pipetables, gfm-pipetables, emphasisextras, listextras, hardlinebreak, footnotes, footers, citations, attributes, gridtables, abbreviations, emojis, definitionlists, customcontainers, figures, mathematics, bootstrap, medialinks, smartypants, autoidentifiers, tasklists, diagrams, nofollowlinks, noopenerlinks, noreferrerlinks, nohtml, yaml, nonascii-noescape, autolinks, globalization
+The WPF renderer supports headings, paragraphs, emphasis, links, fenced code, lists, quotes,
+tables, task lists, local images, selection, copy, Total Commander search and dark mode. Raw HTML
+inside Markdown is disabled. Relative images are restricted to the directory containing the
+Markdown file.
 
-- `Renderer: CustomCSS` a path to a CSS sheet for customizing the resulting look of the document. A collection of four sheets from [Markdown CSS](https://markdowncss.github.io/) and six Github-inspired sheets courtesy of S.&nbsp;Kuznetsov is included into the package.
+Fenced `mermaid` blocks are rendered locally to SVG by the bundled .NET Framework 4.8 port of
+[Mermaider](https://github.com/nullean/mermaider), then converted to WPF drawings by
+[SharpVectors](https://github.com/ElinamLLC/SharpVectors). No browser engine or network access is
+used for diagrams.
+The adapted Mermaider sources are vendored in `ThirdParty\Mermaider` and built directly with the
+plugin; they are not downloaded as an external source dependency during the build.
 
-## Internet Explorer Update
+Configuration is stored in `MarkdownView.ini`:
 
-The plugin is based on an obsolete Internet Explorer engine, which can be upgraded via [registry hacks](https://github.com/rg-software/wlx-markdown-viewer/raw/master/ie_upgrade_registry.zip) (check [MSDN](https://learn.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/general-info/ee330730(v=vs.85)?redirectedfrom=MSDN#browser-emulation) for details.)
+- `Extensions: MarkdownExtensions` lists file extensions handled as Markdown.
+- `Renderer: Extensions` selects Markdig extensions. The default enables common, advanced,
+  emoji, mathematics and task-list parsing.
+
+## Repository layout
+
+- `Build\` contains installation-package source files: `MarkdownView.ini`, Total Commander
+  metadata and `MarkdownView-drop.cmd`. The build script copies this directory into the package
+  staging area.
+- `Markdown\` contains the C++/CLI bridge between the native WLX plugin and the managed WPF
+  renderer. It produces the architecture-specific `Markdown-x86.dll` and `Markdown-x64.dll`.
+- `Markdown.Wpf\` contains the .NET Framework 4.8 Markdown viewer: Markdig parsing, WPF
+  `FlowDocument` rendering, themes, search, selection, local images and Mermaid integration.
+- `MarkdownView\` contains the native x86/x64 WLX plugin, Total Commander Lister API entry points,
+  window and keyboard handling, and version resources.
+- `ThirdParty\` contains modified third-party source code that must be kept in the repository.
+  Currently it holds the .NET Framework 4.8 port of Mermaider and Sugiyama together with upstream
+  provenance and license files. NuGet dependencies are not stored here.
 
 ## Setup
 
-The binary plugin archive comes with the setup script. Just enter the archive, and confirm installation.
+The combined archive contains `MarkdownView.wlx` for 32-bit Total Commander and
+`MarkdownView.wlx64` for 64-bit Total Commander. Open the ZIP in Total Commander and confirm the
+plugin installation; Total Commander selects the correct architecture automatically. The archive
+also contains `TEST.md` for checking F3, Esc, search, themes and Markdown/Mermaid rendering after
+installation.
+
+`MarkdownView-drop.cmd` removes files from an installed plugin directory. For safety it runs only
+from a directory named `MarkdownView`. Files that are still locked are renamed by appending
+`.drop`.
+
+## Building
+
+Run `BuildMakeSetup.bat` to restore dependencies, build x86 and x64, Authenticode-sign every
+unsigned PE file and create `dist\MarkdownView-<version>.zip`. All intermediate build outputs and
+package staging files are kept under `tmp\`.
+
+The build requires Visual Studio 2022 or Build Tools with the C++ workload, the .NET Framework 4.8
+targeting pack, a current .NET SDK for the SDK-style projects, and Internet access for NuGet
+restore. End users do not need these build tools or an additional runtime.
+
+## Testing
+
+Open `TEST.md` with F3 in Total Commander to check Markdown rendering, dark-theme contrast,
+selection, copy, search, local Mermaid diagrams and closing Lister with Esc.

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Markdown.Wpf</AssemblyName>
+    <RootNamespace>MarkdownView.Wpf</RootNamespace>
+    <ProjectGuid>{A4A0F4CA-3C5D-4AD7-B21B-22F74BE77FE6}</ProjectGuid>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Markdig" Version="0.40.0" />
+    <PackageReference Include="SharpVectors.Wpf" Version="1.8.5" />
+    <ProjectReference Include="..\ThirdParty\Mermaider\Mermaider\Mermaider.Net48.csproj">
+      <AdditionalProperties>Configuration=Release;Platform=AnyCPU</AdditionalProperties>
+    </ProjectReference>
+  </ItemGroup>
+</Project>

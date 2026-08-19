@@ -1,0 +1,267 @@
+using System.Globalization;
+using System.Text;
+using Mermaider.Models;
+
+namespace Mermaider.Theming;
+
+/// <summary>
+/// CSS custom property derivation system for SVG theming.
+/// Generates the &lt;style&gt; block and SVG opening tag.
+/// </summary>
+internal static class StyleBlock
+{
+	private static class Mix
+	{
+		internal const int Text = 100;
+		internal const int TextSec = 55;
+		internal const int TextMuted = 35;
+		internal const int TextFaint = 20;
+		internal const int Line = 32;
+		internal const int Arrow = 70;
+		internal const int NodeFill = 10;
+		internal const int NodeStroke = 22;
+		internal const int GroupFill = 3;
+		internal const int GroupHeader = 4;
+		internal const int GroupStroke = 10;
+		internal const int InnerStroke = 10;
+		internal const int KeyBadge = 8;
+
+		internal const int AccentFill = 8;
+		internal const int AccentStroke = 20;
+		internal const int AccentText = 65;
+	}
+
+	internal static void AppendSvgOpenTag(
+		StringBuilder sb, double width, double height,
+		DiagramColors colors, bool transparent,
+		AccessibilityInfo? accessibility = null, DiagramType? diagramType = null)
+	{
+		_ = sb.Append("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 ")
+			.Append(width).Append(' ').Append(height)
+			.Append("\" width=\"").Append(width)
+			.Append("\" height=\"").Append(height).Append('"');
+
+		if (accessibility?.HasContent == true)
+		{
+			_ = sb.Append(" role=\"img\"");
+			if (diagramType.HasValue)
+				_ = sb.Append(" aria-roledescription=\"").Append(GetRoleDescription(diagramType.Value)).Append('"');
+			if (accessibility.Title is { Length: > 0 })
+			{
+				_ = sb.Append(" aria-label=\"");
+				Text.MultilineUtils.AppendEscapedAttr(sb, accessibility.Title.AsSpan());
+				_ = sb.Append('"');
+			}
+		}
+
+		// Colors may originate from source-authored %%{init}%% themeVariables (non-strict mode),
+		// so they are user-controlled and must be escaped before landing in the style="..."
+		// attribute — otherwise a value like `red"><script>...` breaks out of the attribute.
+		_ = sb.Append(" style=\"--bg:").Append(Text.MultilineUtils.EscapeAttr(colors.Bg))
+			.Append(";--fg:").Append(Text.MultilineUtils.EscapeAttr(colors.Fg));
+
+		if (colors.Line is not null)
+			_ = sb.Append(";--line:").Append(Text.MultilineUtils.EscapeAttr(colors.Line));
+		if (colors.Accent is not null)
+			_ = sb.Append(";--accent:").Append(Text.MultilineUtils.EscapeAttr(colors.Accent));
+		if (colors.Muted is not null)
+			_ = sb.Append(";--muted:").Append(Text.MultilineUtils.EscapeAttr(colors.Muted));
+		if (colors.Surface is not null)
+			_ = sb.Append(";--surface:").Append(Text.MultilineUtils.EscapeAttr(colors.Surface));
+		if (colors.Border is not null)
+			_ = sb.Append(";--border:").Append(Text.MultilineUtils.EscapeAttr(colors.Border));
+
+		if (!transparent)
+			_ = sb.Append(";background:var(--bg)");
+
+		_ = sb.Append("\">");
+
+		AppendAccessibilityElements(sb, accessibility);
+	}
+
+	internal static void AppendAccessibilityElements(StringBuilder sb, AccessibilityInfo? accessibility)
+	{
+		if (accessibility?.HasContent != true)
+			return;
+
+		if (accessibility.Title is { Length: > 0 })
+		{
+			_ = sb.Append("\n<title>");
+			Text.MultilineUtils.AppendEscapedXml(sb, accessibility.Title.AsSpan());
+			_ = sb.Append("</title>");
+		}
+
+		if (accessibility.Description is { Length: > 0 })
+		{
+			_ = sb.Append("\n<desc>");
+			Text.MultilineUtils.AppendEscapedXml(sb, accessibility.Description.AsSpan());
+			_ = sb.Append("</desc>");
+		}
+	}
+
+	private static string GetRoleDescription(DiagramType type) => type switch
+	{
+		DiagramType.Flowchart => "flowchart",
+		DiagramType.State => "state diagram",
+		DiagramType.Sequence => "sequence diagram",
+		DiagramType.Class => "class diagram",
+		DiagramType.Er => "ER diagram",
+		DiagramType.Pie => "pie chart",
+		DiagramType.Quadrant => "quadrant chart",
+		DiagramType.Timeline => "timeline",
+		DiagramType.GitGraph => "git graph",
+		DiagramType.Radar => "radar chart",
+		DiagramType.Treemap => "treemap",
+		DiagramType.Venn => "venn diagram",
+		DiagramType.Mindmap => "mindmap",
+		DiagramType.Gantt => "gantt chart",
+		DiagramType.Journey => "user journey",
+		DiagramType.C4 => "C4 diagram",
+		DiagramType.Sankey => "sankey diagram",
+		DiagramType.XyChart => "XY chart",
+		DiagramType.Requirement => "requirement diagram",
+		DiagramType.Packet => "packet diagram",
+		DiagramType.Kanban => "kanban board",
+		DiagramType.Architecture => "architecture diagram",
+		DiagramType.Block => "block diagram",
+		DiagramType.TreeView => "tree view",
+		_ => "diagram"
+	};
+
+	// CSS generic font family keywords must not be quoted in font-family declarations.
+	private static readonly System.Collections.Frozen.FrozenSet<string> GenericFontKeywords =
+		System.Collections.Frozen.FrozenSet.ToFrozenSet(
+		[
+			"serif", "sans-serif", "monospace", "cursive", "fantasy",
+			"system-ui", "ui-serif", "ui-sans-serif", "ui-monospace", "ui-rounded",
+			"emoji", "math", "fangsong"
+		], StringComparer.OrdinalIgnoreCase);
+
+	private static void AppendFontFamilyCss(StringBuilder sb, string selector, string fontName, string fallbackStack)
+	{
+		_ = sb.Append("  ").Append(selector).Append(" { font-family: ");
+		if (GenericFontKeywords.Contains(fontName))
+		{
+			_ = sb.Append(fontName);
+		}
+		else
+		{
+			_ = sb.Append('\'');
+			AppendCssString(sb, fontName);
+			_ = sb.Append('\'');
+		}
+		_ = sb.Append(", ").Append(fallbackStack).Append("; }\n");
+	}
+
+	/// <summary>
+	/// Emits a CSS string using only literal ASCII identifier characters and positive
+	/// hexadecimal escapes. Quotes, braces, newlines, and other syntax characters therefore
+	/// remain data inside the surrounding quoted font-family string.
+	/// </summary>
+	private static void AppendCssString(StringBuilder sb, string value)
+	{
+		foreach (var c in value)
+		{
+			if (Mermaider.Compatibility.Net48Compat.IsAsciiLetterOrDigit(c) || c is ' ' or '-' or '_')
+			{
+				_ = sb.Append(c);
+				continue;
+			}
+
+			_ = sb.Append('\\')
+				.Append(((int)c).ToString("X", CultureInfo.InvariantCulture))
+				.Append(' ');
+		}
+	}
+
+	internal static void AppendStyleBlock(StringBuilder sb, string? font = null, StrictStylingOptions? strict = null, Rendering.FontScale? fontScale = null, string? monoFont = null)
+	{
+		_ = sb.Append("\n<style>\n");
+
+		if (font is { Length: > 0 })
+			AppendFontFamilyCss(sb, "text", font, Rendering.RenderConstants.SansStack);
+		else
+			_ = sb.Append("  text { font-family: ").Append(Rendering.RenderConstants.SansStack).Append("; }\n");
+
+		if (monoFont is { Length: > 0 })
+			AppendFontFamilyCss(sb, ".mono", monoFont, Rendering.RenderConstants.MonoStack);
+		else
+			_ = sb.Append("  .mono { font-family: ").Append(Rendering.RenderConstants.MonoStack).Append("; }\n");
+
+		_ = sb.Append("  svg {\n");
+		_ = sb.Append("    --_text:          var(--fg);\n");
+		_ = sb.Append("    --_text-sec:      var(--muted, color-mix(in srgb, var(--fg) ").Append(Mix.TextSec).Append("%, var(--bg)));\n");
+		_ = sb.Append("    --_text-muted:    var(--muted, color-mix(in srgb, var(--fg) ").Append(Mix.TextMuted).Append("%, var(--bg)));\n");
+		_ = sb.Append("    --_text-faint:    color-mix(in srgb, var(--fg) ").Append(Mix.TextFaint).Append("%, var(--bg));\n");
+		_ = sb.Append("    --_line:          var(--line, color-mix(in srgb, var(--fg) ").Append(Mix.Line).Append("%, var(--bg)));\n");
+		_ = sb.Append("    --_arrow:         var(--accent, color-mix(in srgb, var(--fg) ").Append(Mix.Arrow).Append("%, var(--bg)));\n");
+		_ = sb.Append("    --_node-fill:     var(--surface, color-mix(in srgb, var(--fg) ").Append(Mix.NodeFill).Append("%, var(--bg)));\n");
+		_ = sb.Append("    --_node-stroke:   var(--border, color-mix(in srgb, var(--fg) ").Append(Mix.NodeStroke).Append("%, var(--bg)));\n");
+		_ = sb.Append("    --_group-fill:    color-mix(in srgb, var(--fg) ").Append(Mix.GroupFill).Append("%, var(--bg));\n");
+		_ = sb.Append("    --_group-hdr:     color-mix(in srgb, var(--fg) ").Append(Mix.GroupHeader).Append("%, var(--bg));\n");
+		_ = sb.Append("    --_group-stroke:  color-mix(in srgb, var(--fg) ").Append(Mix.GroupStroke).Append("%, var(--bg));\n");
+		_ = sb.Append("    --_inner-stroke:  color-mix(in srgb, var(--fg) ").Append(Mix.InnerStroke).Append("%, var(--bg));\n");
+		_ = sb.Append("    --_key-badge:     color-mix(in srgb, var(--fg) ").Append(Mix.KeyBadge).Append("%, var(--bg));\n");
+		_ = sb.Append("    --_accent-fill:   color-mix(in srgb, var(--accent, var(--fg)) ").Append(Mix.AccentFill).Append("%, var(--bg));\n");
+		_ = sb.Append("    --_accent-stroke: color-mix(in srgb, var(--accent, var(--fg)) ").Append(Mix.AccentStroke).Append("%, var(--bg));\n");
+		_ = sb.Append("    --_accent-text:   color-mix(in srgb, var(--accent, var(--fg)) ").Append(Mix.AccentText).Append("%, var(--bg));\n");
+
+		var fs = fontScale ?? Rendering.FontScale.Default;
+		_ = sb.Append("    --fs-xs: ").Append(fs.Xs).Append(";\n");
+		_ = sb.Append("    --fs-s:  ").Append(fs.S).Append(";\n");
+		_ = sb.Append("    --fs-m:  ").Append(fs.M).Append(";\n");
+		_ = sb.Append("    --fs-l:  ").Append(fs.L).Append(";\n");
+		_ = sb.Append("  }\n");
+		_ = sb.Append("  .node, .actor, .entity, .class-node, .architecture-service, .kanban-card { filter: drop-shadow(0 1px 3px rgba(0,0,0,.07)); }\n");
+		_ = sb.Append("  .subgraph, .kanban-column { filter: drop-shadow(0 1px 2px rgba(0,0,0,.04)); }\n");
+
+		if (strict is not null)
+			AppendStrictStylingClasses(sb, strict);
+
+		_ = sb.Append("</style>\n");
+	}
+
+	private static void AppendStrictStylingClasses(StringBuilder sb, StrictStylingOptions strict)
+	{
+		var lightRules = new List<(string Selector, string Fill, string Stroke, string? Color)>();
+		var darkRules = new List<(string Selector, string Fill, string Stroke, string? Color)>();
+
+		foreach (var cls in strict.AllowedClasses)
+		{
+			if (cls.IsExternal)
+				continue;
+
+			var selector = $".cls-{cls.Name}";
+
+			lightRules.Add((selector, cls.Fill!, cls.Stroke ?? cls.Fill!, cls.Color));
+
+			var darkFill = cls.DarkFill ?? ColorUtils.InvertLightness(cls.Fill!);
+			var darkStroke = cls.DarkStroke ?? (cls.Stroke is not null ? ColorUtils.InvertLightness(cls.Stroke) : darkFill);
+			var darkColor = cls.DarkColor ?? (cls.Color is not null ? ColorUtils.InvertLightness(cls.Color) : null);
+			darkRules.Add((selector, darkFill, darkStroke, darkColor));
+		}
+
+		if (lightRules.Count == 0)
+			return;
+
+		foreach (var (selector, fill, stroke, color) in lightRules)
+		{
+			_ = sb.Append("  ").Append(selector).Append(" rect, ").Append(selector).Append(" polygon, ")
+				.Append(selector).Append(" circle, ").Append(selector).Append(" ellipse { fill: ")
+				.Append(fill).Append("; stroke: ").Append(stroke).Append("; }\n");
+			if (color is not null)
+				_ = sb.Append("  ").Append(selector).Append(" text { fill: ").Append(color).Append("; }\n");
+		}
+
+		_ = sb.Append("  @media (prefers-color-scheme: dark) {\n");
+		foreach (var (selector, fill, stroke, color) in darkRules)
+		{
+			_ = sb.Append("    ").Append(selector).Append(" rect, ").Append(selector).Append(" polygon, ")
+				.Append(selector).Append(" circle, ").Append(selector).Append(" ellipse { fill: ")
+				.Append(fill).Append("; stroke: ").Append(stroke).Append("; }\n");
+			if (color is not null)
+				_ = sb.Append("    ").Append(selector).Append(" text { fill: ").Append(color).Append("; }\n");
+		}
+		_ = sb.Append("  }\n");
+	}
+}

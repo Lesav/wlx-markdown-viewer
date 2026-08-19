@@ -1,0 +1,125 @@
+using System.Globalization;
+
+namespace Mermaider.Theming;
+
+/// <summary>Hex color manipulation for auto-deriving dark mode variants and contrast enforcement.</summary>
+internal static class ColorUtils
+{
+	/// <summary>
+	/// Returns <c>"#ffffff"</c> or <c>"#1a1a1a"</c> based on the WCAG relative luminance of
+	/// <paramref name="hex"/>, so text drawn on top of a categorical palette fill is always legible.
+	/// </summary>
+	internal static string ContrastText(string hex)
+	{
+		var (r, g, b) = ParseHex(hex);
+		// WCAG sRGB linearization
+		static double Lin(byte v)
+		{
+			var c = v / 255.0;
+			return c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
+		}
+		var luminance = (0.2126 * Lin(r)) + (0.7152 * Lin(g)) + (0.0722 * Lin(b));
+		// Contrast against white (L=1) vs near-black (L≈0): pick whichever is ≥4.5:1
+		return luminance > 0.179 ? "#1a1a1a" : "#ffffff";
+	}
+
+	internal static string InvertLightness(string hex)
+	{
+		var (r, g, b) = ParseHex(hex);
+		var (h, s, l) = RgbToHsl(r, g, b);
+		var (r2, g2, b2) = HslToRgb(h, s, 1.0 - l);
+		return $"#{r2:X2}{g2:X2}{b2:X2}";
+	}
+
+	/// <summary>Shift the HSL lightness of a hex color by <paramref name="delta"/> (e.g. -0.20 to darken, +0.15 to lighten).</summary>
+	internal static string AdjustLightness(string hex, double delta)
+	{
+		var (r, g, b) = ParseHex(hex);
+		var (h, s, l) = RgbToHsl(r, g, b);
+		var (r2, g2, b2) = HslToRgb(h, s, Mermaider.Compatibility.Net48Compat.Clamp(l + delta, 0.0, 1.0));
+		return $"#{r2:X2}{g2:X2}{b2:X2}";
+	}
+
+	private static (byte R, byte G, byte B) ParseHex(string hex)
+	{
+		var span = hex.AsSpan();
+		if (span.Length > 0 && span[0] == '#')
+			span = span[1..];
+
+		if (span.Length == 3)
+		{
+			var r = byte.Parse(span[..1].ToString(), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+			var g = byte.Parse(span[1..2].ToString(), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+			var b = byte.Parse(span[2..3].ToString(), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+			return ((byte)(r * 17), (byte)(g * 17), (byte)(b * 17));
+		}
+
+		if (span.Length >= 6)
+		{
+			var r = byte.Parse(span[..2].ToString(), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+			var g = byte.Parse(span[2..4].ToString(), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+			var b = byte.Parse(span[4..6].ToString(), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+			return (r, g, b);
+		}
+
+		return (128, 128, 128);
+	}
+
+	private static (double H, double S, double L) RgbToHsl(byte r, byte g, byte b)
+	{
+		var rf = r / 255.0;
+		var gf = g / 255.0;
+		var bf = b / 255.0;
+
+		var max = Math.Max(rf, Math.Max(gf, bf));
+		var min = Math.Min(rf, Math.Min(gf, bf));
+		var l = (max + min) / 2.0;
+
+		if (Math.Abs(max - min) < double.Epsilon)
+			return (0, 0, l);
+
+		var d = max - min;
+		var s = l > 0.5 ? d / (2.0 - max - min) : d / (max + min);
+
+		var h = Math.Abs(max - rf) < double.Epsilon
+			? (((gf - bf) / d) + (gf < bf ? 6 : 0)) / 6.0
+			: Math.Abs(max - gf) < double.Epsilon ?
+				(((bf - rf) / d) + 2) / 6.0
+				: (((rf - gf) / d) + 4) / 6.0;
+
+		return (h, s, l);
+	}
+
+	private static (byte R, byte G, byte B) HslToRgb(double h, double s, double l)
+	{
+		if (s == 0)
+		{
+			var v = (byte)Math.Round(l * 255);
+			return (v, v, v);
+		}
+
+		var q = l < 0.5 ? l * (1 + s) : l + s - (l * s);
+		var p = (2 * l) - q;
+
+		return (
+			(byte)Math.Round(HueToRgb(p, q, h + (1.0 / 3.0)) * 255),
+			(byte)Math.Round(HueToRgb(p, q, h) * 255),
+			(byte)Math.Round(HueToRgb(p, q, h - (1.0 / 3.0)) * 255)
+		);
+	}
+
+	private static double HueToRgb(double p, double q, double t)
+	{
+		if (t < 0)
+			t += 1;
+		if (t > 1)
+			t -= 1;
+		if (t < 1.0 / 6.0)
+			return p + ((q - p) * 6.0 * t);
+		if (t < 1.0 / 2.0)
+			return q;
+		if (t < 2.0 / 3.0)
+			return p + ((q - p) * ((2.0 / 3.0) - t) * 6.0);
+		return p;
+	}
+}

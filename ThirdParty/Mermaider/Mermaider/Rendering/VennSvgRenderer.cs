@@ -1,0 +1,139 @@
+using System.Text;
+using Mermaider.Models;
+using Mermaider.Text;
+using Mermaider.Theming;
+
+namespace Mermaider.Rendering;
+
+internal static class VennSvgRenderer
+{
+	private const double BaseRadius = 120;
+	private const double CenterX = 300;
+	private const double CenterY = 200;
+	private const string LabelFontSize = RenderConstants.FsVar.M;
+	private const string UnionLabelFontSize = RenderConstants.FsVar.S;
+	private const double FillOpacity = 0.35;
+
+
+	internal static string Render(VennDiagram diagram, SvgRenderContext context)
+	{
+		var sb = RenderToBuilder(diagram, context);
+		try
+		{
+			return sb.ToString();
+		}
+		finally
+		{
+			_ = sb.Clear();
+			SharedStringBuilderPool.Instance.Return(sb);
+		}
+	}
+
+	internal static StringBuilder RenderToBuilder(VennDiagram diagram, SvgRenderContext context)
+	{
+		var sb = SharedStringBuilderPool.Instance.Get();
+
+		var n = diagram.Sets.Count;
+		var width = CenterX * 2;
+		var height = CenterY * 2;
+
+		StyleBlock.AppendSvgOpenTag(sb, width, height, context.Styles.Colors, context.Styles.Transparent, context.Accessibility, context.DiagramType);
+		StyleBlock.AppendStyleBlock(sb, context.Styles.Font, context.Styles.Strict, context.Styles.FontScale, context.Styles.MonoFont);
+		_ = sb.Append("\n<defs>\n</defs>\n");
+
+		if (n == 0)
+		{
+			_ = sb.Append("\n</svg>");
+			return sb;
+		}
+
+		var positions = ComputePositions(n);
+		var setPositions = new Dictionary<string, (double X, double Y)>();
+
+		for (var i = 0; i < n; i++)
+		{
+			var set = diagram.Sets[i];
+			var (px, py) = positions[i];
+			setPositions[set.Id] = (px, py);
+			var color = context.Styles.Colors.PaletteAt(i);
+			var r = BaseRadius;
+
+			_ = sb.Append("\n<circle cx=\"").Append(px.SvgFormat()).Append("\" cy=\"").Append(py.SvgFormat())
+				.Append("\" r=\"").Append(r.SvgFormat())
+				.Append("\" fill=\"").Append(color)
+				.Append("\" fill-opacity=\"").Append(FillOpacity.SvgFormat())
+				.Append("\" stroke=\"").Append(color)
+				.Append("\" stroke-width=\"2\" />");
+
+			var labelAngle = n <= 1 ? 0 : (2 * Math.PI * i / n) - (Math.PI / 2);
+			var labelDist = n <= 1 ? 0 : r * 0.6;
+			var lx = px + (labelDist * Math.Cos(labelAngle));
+			var ly = py + (labelDist * Math.Sin(labelAngle));
+
+			_ = sb.Append("\n<text x=\"").Append(lx.SvgFormat()).Append("\" y=\"").Append(ly.SvgFormat())
+				.Append("\" text-anchor=\"middle\" dy=\"0.35em\" font-size=\"")
+				.Append(LabelFontSize).Append("\" font-weight=\"600\" fill=\"var(--_text)\">");
+			MultilineUtils.AppendEscapedXml(sb, set.Label.AsSpan());
+			_ = sb.Append("</text>");
+		}
+
+		foreach (var union in diagram.Unions)
+		{
+			if (union.Label is not { Length: > 0 })
+				continue;
+
+			var ux = 0.0;
+			var uy = 0.0;
+			var count = 0;
+			foreach (var id in union.SetIds)
+			{
+				if (setPositions.TryGetValue(id, out var pos))
+				{
+					ux += pos.X;
+					uy += pos.Y;
+					count++;
+				}
+			}
+			if (count == 0)
+				continue;
+
+			ux /= count;
+			uy /= count;
+
+			_ = sb.Append("\n<text x=\"").Append(ux.SvgFormat()).Append("\" y=\"").Append(uy.SvgFormat())
+				.Append("\" text-anchor=\"middle\" dy=\"0.35em\" font-size=\"")
+				.Append(UnionLabelFontSize).Append("\" font-weight=\"500\" fill=\"var(--_text)\">");
+			MultilineUtils.AppendEscapedXml(sb, union.Label.AsSpan());
+			_ = sb.Append("</text>");
+		}
+
+		_ = sb.Append("\n</svg>");
+		return sb;
+	}
+
+	private static List<(double X, double Y)> ComputePositions(int n)
+	{
+		var positions = new List<(double X, double Y)>(n);
+		if (n == 1)
+		{
+			positions.Add((CenterX, CenterY));
+		}
+		else if (n == 2)
+		{
+			var offset = BaseRadius * 0.55;
+			positions.Add((CenterX - offset, CenterY));
+			positions.Add((CenterX + offset, CenterY));
+		}
+		else
+		{
+			var arrangeRadius = BaseRadius * 0.6;
+			for (var i = 0; i < n; i++)
+			{
+				var angle = (2 * Math.PI * i / n) - (Math.PI / 2);
+				positions.Add((CenterX + (arrangeRadius * Math.Cos(angle)), CenterY + (arrangeRadius * Math.Sin(angle))));
+			}
+		}
+		return positions;
+	}
+
+}

@@ -7,3 +7,23 @@ ReleaseWLX/
 x64/
 .vs/
 *.vcxproj.user
+.mermaider-upstream/
+*.metagen
+/tmp/
+/dist/
+
+# Generated binaries and release packages
+/MarkdownView-*.zip
+*.wlx
+*.wlx64
+*.pdb
+*.exp
+*.lib
+*.iobj
+*.ipdb
+*.tlog
+*.lastbuildstate
+
+# Redundant package copies; canonical sources are in the repository root and Build/
+/MarkdownView/CANGELOG.md
+/MarkdownView/MarkdownView-drop.cmd

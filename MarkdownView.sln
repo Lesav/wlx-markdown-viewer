@@ -7,8 +7,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MarkdownView", "MarkdownVie
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Markdown", "Markdown\Markdown.vcxproj", "{D5058C67-BF13-4E8E-9664-F5423B79771E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Markdig.net", "Markdig.net\Markdig.net.csproj", "{F86ACC7C-B7AF-4CC3-9EE2-3EFA8C585B81}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -43,18 +41,6 @@ Global
 		{D5058C67-BF13-4E8E-9664-F5423B79771E}.Release|Win32.Build.0 = Release|Win32
 		{D5058C67-BF13-4E8E-9664-F5423B79771E}.Release|x64.ActiveCfg = Release|x64
 		{D5058C67-BF13-4E8E-9664-F5423B79771E}.Release|x64.Build.0 = Release|x64
-		{F86ACC7C-B7AF-4CC3-9EE2-3EFA8C585B81}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{F86ACC7C-B7AF-4CC3-9EE2-3EFA8C585B81}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{F86ACC7C-B7AF-4CC3-9EE2-3EFA8C585B81}.Debug|Win32.ActiveCfg = Debug|Any CPU
-		{F86ACC7C-B7AF-4CC3-9EE2-3EFA8C585B81}.Debug|Win32.Build.0 = Debug|Any CPU
-		{F86ACC7C-B7AF-4CC3-9EE2-3EFA8C585B81}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{F86ACC7C-B7AF-4CC3-9EE2-3EFA8C585B81}.Debug|x64.Build.0 = Debug|Any CPU
-		{F86ACC7C-B7AF-4CC3-9EE2-3EFA8C585B81}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{F86ACC7C-B7AF-4CC3-9EE2-3EFA8C585B81}.Release|Any CPU.Build.0 = Release|Any CPU
-		{F86ACC7C-B7AF-4CC3-9EE2-3EFA8C585B81}.Release|Win32.ActiveCfg = Release|Any CPU
-		{F86ACC7C-B7AF-4CC3-9EE2-3EFA8C585B81}.Release|Win32.Build.0 = Release|Any CPU
-		{F86ACC7C-B7AF-4CC3-9EE2-3EFA8C585B81}.Release|x64.ActiveCfg = Release|Any CPU
-		{F86ACC7C-B7AF-4CC3-9EE2-3EFA8C585B81}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,520 +1,404 @@
-#ifndef E_BOUNDS
-#define E_BOUNDS                         _HRESULT_TYPEDEF_(0x8000000BL)
-#endif
-
-#include <direct.h>
 #include <windows.h>
-#include <fstream>
-#include <sstream>
-#include "browserhost.h"
-#include "ListerPlugin.h"
-#include "resource.h"
-#include <ExDispID.h>
-#include <locale>
-#include <iostream>
-#include <vector>
-#include <iterator>
-#include <codecvt>
+#include <objbase.h>
 #include <algorithm>
-#include "functions.h"
+#include <cwctype>
+#include <string>
+#include <vector>
 
+#include "listerplugin.h"
 #include "Markdown/markdown.h"
 
-HHOOK hook_keyb = NULL;
-HIMAGELIST img_list = NULL;
-int num_lister_windows = 0;
-
-// used to by the refresh function
-char FileToLoadCopy[MAX_PATH];
-HWND ParentWinCopy;
-int ShowFlagsCopy;
-
-CSmallStringList html_extensions;
-CSmallStringList markdown_extensions;
-CSmallStringList def_signatures;
-CSmallStringList trans_hotkeys;
-CSmallStringList typing_trans_hotkeys;
-char html_template[512];
-char html_template_dark[512];
-char renderer_extensions[2048];
-
-void RefreshBrowser();
-
-void StoreRefreshParams(const char* FileToLoad, HWND ParentWin, int ShowFlags)
+namespace
 {
-	strcpy(FileToLoadCopy, FileToLoad);
-	ParentWinCopy = ParentWin;
-	ShowFlagsCopy = ShowFlags;
+constexpr wchar_t WindowClassName[] = L"MarkdownViewWpfHostWindow";
+constexpr wchar_t StateProperty[] = L"MarkdownView.WpfState";
+constexpr wchar_t DefaultMarkdownExtensions[] =
+    L"md;markdown;mdown;mdtext;mdtxt;mdwn;mk;mkd;mkdn;mkdown";
+constexpr wchar_t DefaultRendererExtensions[] =
+    L"common+advanced+emojis+mathematics+tasklists";
+
+HINSTANCE instance = nullptr;
+HMODULE markdown_module = nullptr;
+INIT_ONCE configuration_once = INIT_ONCE_STATIC_INIT;
+INIT_ONCE markdown_runtime_once = INIT_ONCE_STATIC_INIT;
+DWORD markdown_load_error = ERROR_SUCCESS;
+std::wstring markdown_extensions;
+std::wstring renderer_extensions;
+
+MarkdownCreateWpfViewProc markdown_create_wpf_view = nullptr;
+MarkdownLoadWpfViewProc markdown_load_wpf_view = nullptr;
+MarkdownDestroyWpfViewProc markdown_destroy_wpf_view = nullptr;
+MarkdownFocusWpfViewProc markdown_focus_wpf_view = nullptr;
+MarkdownCommandWpfViewProc markdown_command_wpf_view = nullptr;
+MarkdownSearchWpfViewProc markdown_search_wpf_view = nullptr;
+
+struct MarkdownWpfState
+{
+    HWND view_window = nullptr;
+    HWND lister_parent = nullptr;
+    std::wstring filename;
+    int show_flags = 0;
+    bool ole_initialized = false;
+};
+
+std::wstring GetModulePath()
+{
+    std::vector<wchar_t> buffer(MAX_PATH);
+    for(;;)
+    {
+        DWORD length = GetModuleFileNameW(instance, buffer.data(), static_cast<DWORD>(buffer.size()));
+        if(length == 0)
+            return std::wstring();
+        if(length < buffer.size() - 1)
+            return std::wstring(buffer.data(), length);
+        buffer.resize(buffer.size() * 2);
+    }
 }
 
-LRESULT CALLBACK HookKeybProc(int nCode,WPARAM wParam,LPARAM lParam)
+std::wstring GetIniPath()
 {
-	if (nCode<0/* || dbg_DontExecHook*/) 
-		return CallNextHookEx(hook_keyb, nCode, wParam, lParam);
-	HWND BrowserWnd=GetBrowserHostWnd(GetFocus());
-	if(BrowserWnd)
-		SendMessage(BrowserWnd,WM_IEVIEW_HOTKEY,wParam,lParam);
-	return CallNextHookEx(hook_keyb, nCode, wParam, lParam);
+    std::wstring path = GetModulePath();
+    size_t separator = path.find_last_of(L"\\/");
+    size_t dot = path.find_last_of(L'.');
+    if(dot == std::wstring::npos || separator != std::wstring::npos && dot < separator)
+        path += L".ini";
+    else
+        path.replace(dot, std::wstring::npos, L".ini");
+    return path;
 }
 
-void InitProc()
+std::wstring ReadIniString(const wchar_t* section, const wchar_t* key, const wchar_t* fallback)
 {
-	if(!options.valid)
-		InitOptions();
-	if(!hook_keyb&&(options.flags&OPT_KEEPHOOKNOWINDOWS))
-		hook_keyb = SetWindowsHookEx(WH_KEYBOARD, HookKeybProc, hinst, (options.flags&OPT_GLOBALHOOK)?0:GetCurrentThreadId());
-	if(!img_list)
-	{
-		unsigned char toolbar_bpp = (options.toolbar>>2)&3;
-		if(toolbar_bpp==2)
-		{
-			OSVERSIONINFO osvi;
-			ZeroMemory(&osvi, sizeof(OSVERSIONINFO));
-			osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
-			GetVersionEx(&osvi);
-			toolbar_bpp = (osvi.dwMajorVersion>5||osvi.dwMajorVersion==5&&osvi.dwMinorVersion>=1)?1:0;
-		}
-		if(toolbar_bpp==1)
-			img_list = ImageList_LoadImage(hinst, MAKEINTRESOURCE(IDB_BITMAP2), 24, 0, CLR_NONE, IMAGE_BITMAP, LR_CREATEDIBSECTION);
-		else
-			img_list = ImageList_LoadImage(hinst, MAKEINTRESOURCE(IDB_BITMAP1), 24, 0, CLR_DEFAULT, IMAGE_BITMAP, LR_CREATEDIBSECTION);
-	}
-	
-	if(!markdown_extensions.valid())
-		markdown_extensions.load_from_ini(options.IniFileName, "Extensions", "MarkdownExtensions");
-	if(!html_extensions.valid())
-		html_extensions.load_from_ini(options.IniFileName, "Extensions", "HTMLExtensions");
-	if(!def_signatures.valid())
-		def_signatures.load_sign_from_ini(options.IniFileName, "Extensions", "DefaultSignatures");
-	if(!typing_trans_hotkeys.valid())
-		typing_trans_hotkeys.load_from_ini(options.IniFileName, "Hotkeys", "TypingTranslationHotkeys");
-	if(!trans_hotkeys.valid())
-		trans_hotkeys.load_from_ini(options.IniFileName, "Hotkeys", "TranslationHotkeys");
-	
-	GetPrivateProfileString("Renderer", "Extensions", "", &renderer_extensions[0], 2048, options.IniFileName);
-	GetPrivateProfileString("Renderer", "CustomCSS", "", &html_template[0], 512, options.IniFileName);
-	GetPrivateProfileString("Renderer", "CustomCSSDark", "", &html_template_dark[0], 512, options.IniFileName);
+    std::vector<wchar_t> buffer(4096);
+    GetPrivateProfileStringW(section, key, fallback, buffer.data(),
+        static_cast<DWORD>(buffer.size()), GetIniPath().c_str());
+    return std::wstring(buffer.data());
 }
 
-LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+BOOL CALLBACK InitConfiguration(PINIT_ONCE, PVOID, PVOID*)
 {
-	if(message==WM_CREATE)
-	{
-	}
-	else if(message==WM_DESTROY && !(options.flags&OPT_QUICKQIUT))
-	{
-		HWND status = (HWND)GetProp(hWnd, PROP_STATUS);
-		HWND toolbar = (HWND)GetProp(hWnd, PROP_TOOLBAR);
-		CBrowserHost* browser_host = (CBrowserHost*)GetProp(hWnd,PROP_BROWSER);
-		RemoveProp(hWnd, PROP_BROWSER);
-		RemoveProp(hWnd, PROP_STATUS);
-		RemoveProp(hWnd, PROP_TOOLBAR);
-		if(status)
-			DestroyWindow(status);
-		if(toolbar)
-			DestroyWindow(toolbar);
-		if(browser_host)
-		{
-			if(options.flags&OPT_SAVEPOS)
-				browser_host->SavePosition();
-			browser_host->Quit();
-		}
-	}
-	else if(message==WM_SIZE)
-	{
-		CBrowserHost* browser_host = (CBrowserHost*)GetProp(hWnd,PROP_BROWSER);
-		if(browser_host)
-			browser_host->Resize();
-		HWND status = (HWND)GetProp(hWnd, PROP_STATUS);
-		if(status)
-		{
-			RECT status_rc,rc;
-			GetClientRect(hWnd,&rc);
-			GetWindowRect(status,&status_rc);
-			MoveWindow(status,0,rc.bottom-(status_rc.bottom-status_rc.top),rc.right-rc.left,status_rc.bottom-status_rc.top,TRUE);
-			InvalidateRect(status,NULL,TRUE);
-		}
-		HWND toolbar = (HWND)GetProp(hWnd, PROP_TOOLBAR);
-		if(toolbar)
-		{
-			RECT toolbar_rc;
-			GetWindowRect(toolbar, &toolbar_rc);
-			MoveWindow(toolbar, 0, 0, LOWORD(lParam), toolbar_rc.bottom-toolbar_rc.top, TRUE);
-			InvalidateRect(toolbar,NULL,TRUE);
-		}
-	}
-	else if(message==WM_SETFOCUS)
-	{
-		CBrowserHost* browser_host = (CBrowserHost*)GetProp(hWnd,PROP_BROWSER);
-		if(browser_host)
-			browser_host->Focus();
-	}
-	else if(message==WM_COMMAND)
-	{
-		CBrowserHost* browser_host = (CBrowserHost*)GetProp(hWnd,PROP_BROWSER);
-		if(browser_host && lParam==(LPARAM)GetProp(hWnd, PROP_TOOLBAR))
-		{
-			switch(LOWORD(wParam))
-			{
-			case TBB_BACK:
-				browser_host->mWebBrowser->GoBack();
-				break;
-			case TBB_FORWARD:
-				browser_host->mWebBrowser->GoForward();
-				break;
-			case TBB_STOP:
-				browser_host->mWebBrowser->Stop();
-				break;
-			case TBB_REFRESH:
-				RefreshBrowser(); // instead of browser_host->mWebBrowser->Refresh();
-				break;
-			case TBB_PRINT:
-				SendMessage(hWnd, WM_IEVIEW_PRINT, 0, 0);
-				break;
-			case TBB_COPY:
-				SendMessage(hWnd, WM_IEVIEW_COMMAND, lc_copy, 0);
-				break;
-			/*case TBB_PASTE:
-				SendMessage(hWnd, WM_IEVIEW_COMMAND, lc_ieview_paste, 0);
-				break;*/
-			case TBB_SEARCH:
-				if(browser_host->mFocusType==fctQuickView)
-					SetFocus(hWnd);
-				SendMessage(hWnd, WM_KEYDOWN, VK_F3, 0);
-				//SendMessage(hWnd, WM_IEVIEW_SEARCH, 0, 0);
-				break;
-			}
-		}
-	}
-	else if(message==WM_IEVIEW_SEARCH||message==WM_IEVIEW_SEARCHW)
-	{
-		CBrowserHost* browser_host = (CBrowserHost*)GetProp(hWnd ,PROP_BROWSER);
-		if(browser_host)
-		{
-			long flags = 0;
-			//if(lParam&lcs_findfirst)
-			//	flags |= ;
-			if(lParam&lcs_matchcase)
-				flags |= 4;
-			if(lParam&lcs_wholewords)
-				flags |= 2;
-			//if(lParam&lcs_backwards)
-			//	flags |= 1;
-			if(message==WM_IEVIEW_SEARCH)
-				browser_host->FindText(CComBSTR((char*)wParam), flags, lParam&lcs_backwards);
-			else if(message==WM_IEVIEW_SEARCHW)
-				browser_host->FindText(CComBSTR((WCHAR*)wParam), flags, lParam&lcs_backwards);
-		}
-	}
-	else if(message==WM_IEVIEW_PRINT)
-	{
-		CBrowserHost* browser_host = (CBrowserHost*)GetProp(hWnd ,PROP_BROWSER);
-		CComQIPtr<IOleCommandTarget, &IID_IOleCommandTarget> pCmd = browser_host->mWebBrowser;
-		if ( pCmd ) 
-			pCmd->Exec(NULL, OLECMDID_PRINT, OLECMDEXECOPT_DODEFAULT, NULL,NULL);
-	}
-	else if(message==WM_IEVIEW_COMMAND)
-	{
-		CBrowserHost* browser_host = (CBrowserHost*)GetProp(hWnd,PROP_BROWSER);
-		if ( browser_host ) 
-		{
-			CComQIPtr<IOleCommandTarget, &IID_IOleCommandTarget> pCmd = browser_host->mWebBrowser;
-			if ( pCmd ) 
-			{
-				if(wParam==lc_selectall)
-					pCmd->Exec(NULL, OLECMDID_SELECTALL, OLECMDEXECOPT_DODEFAULT, NULL,NULL);
-				else if(wParam==lc_copy)
-					pCmd->Exec(NULL, OLECMDID_COPY, OLECMDEXECOPT_DODEFAULT, NULL,NULL);
-				/*else if(wParam==lc_ieview_paste)
-					pCmd->Exec(NULL, OLECMDID_PASTE, OLECMDEXECOPT_DODEFAULT, NULL,NULL);*/
-			}
-		}
-	}
-	else if(message==WM_IEVIEW_HOTKEY)
-	{
-		CBrowserHost* browser_host = (CBrowserHost*)GetProp(hWnd,PROP_BROWSER);
-		if ( browser_host ) 
-		{
-			bool alt_down = 0x20000000&lParam;
-			bool key_down = 0x80000000&lParam;
-			UINT Msg = key_down?(alt_down?WM_SYSKEYUP:WM_KEYUP):(alt_down?WM_SYSKEYDOWN:WM_KEYDOWN);
-			CAtlString key_name = GetFullKeyName(wParam);
-			if(key_name=="Ctrl+Insert")
-				SendMessage(hWnd, WM_IEVIEW_COMMAND, lc_copy, 0);
-			if(browser_host->FormFocused())
-			{
-				if(typing_trans_hotkeys.find(key_name)&&!GetCapture()) 
-					SendMessage(hWnd, Msg, wParam, lParam);
-			}
-			else
-			{
-				if(trans_hotkeys.find(key_name)&&!GetCapture()) 
-					SendMessage(hWnd, Msg, wParam, lParam);
-			}
-			browser_host->ProcessHotkey(Msg, wParam, lParam);
-		}
-	}
-
-	return DefWindowProc(hWnd, message, wParam, lParam);
+    markdown_extensions = ReadIniString(
+        L"Extensions", L"MarkdownExtensions", DefaultMarkdownExtensions);
+    renderer_extensions = ReadIniString(
+        L"Renderer", L"Extensions", DefaultRendererExtensions);
+    return TRUE;
 }
 
-HWND Create_Toolbar(HWND ListWin)
+void EnsureConfiguration()
 {
-	TBBUTTON tb_buttons[10] = 
-	{
-		{0, TBB_BACK,		TBSTATE_ENABLED, BTNS_BUTTON, NULL},
-		{1, TBB_FORWARD,	TBSTATE_ENABLED, BTNS_BUTTON, NULL},
-		{2, TBB_STOP,		TBSTATE_ENABLED, BTNS_BUTTON, NULL},
-		{3, TBB_REFRESH,	TBSTATE_ENABLED, BTNS_BUTTON, NULL},
-		{-1, -1,			TBSTATE_ENABLED, BTNS_SEP,	  NULL},
-		{5, TBB_COPY,		TBSTATE_ENABLED, BTNS_BUTTON, NULL},
-		//{6, TBB_PASTE,		TBSTATE_ENABLED, BTNS_BUTTON, NULL},
-		{-1, -1,			TBSTATE_ENABLED, BTNS_SEP,	  NULL},
-		{4, TBB_PRINT,		TBSTATE_ENABLED, BTNS_BUTTON, NULL},
-		{-1, -1,			TBSTATE_ENABLED, BTNS_SEP,	  NULL},
-		{7, TBB_SEARCH,		TBSTATE_ENABLED, BTNS_BUTTON, NULL}
-	};
-
-	char parent_class_name[64];
-	GetClassName(GetParent(ListWin), parent_class_name, 64);
-	if(strncmp(parent_class_name, "TFormViewUV", 11)==0)
-		tb_buttons[5].fsState = tb_buttons[6].fsState = tb_buttons[9].fsState = TBSTATE_HIDDEN;
-
-	HWND toolbar = CreateWindowEx(0, TOOLBARCLASSNAME, NULL, WS_CHILD|CCS_TOP, 0, 0, 0, 0, ListWin, NULL, hinst, NULL); 
-	SendMessage(toolbar, TB_BUTTONSTRUCTSIZE, (WPARAM) sizeof(TBBUTTON), 0); 
-	SendMessage(toolbar, TB_SETIMAGELIST, 0, (LPARAM)img_list);
-	SendMessage(toolbar, TB_ADDBUTTONS, 10, (LPARAM)&tb_buttons);
-	SendMessage(toolbar, TB_AUTOSIZE, 0, 0);
-
-	ShowWindow(toolbar, SW_SHOW);
-	return toolbar;
+    InitOnceExecuteOnce(&configuration_once, InitConfiguration, nullptr, nullptr);
 }
 
-CComBSTR GetUrlFromFilename(char* FileToLoad)
+std::wstring Lower(std::wstring value)
 {
-	CAtlString url;
-	char ext[MAX_PATH];
-	_splitpath(FileToLoad, NULL, NULL, NULL, ext);
-	strlwr(ext);
-	if((options.flags&OPT_DIRS)&&FileToLoad[strlen(FileToLoad)-1]=='\\')
-		url = FileToLoad;
-	else if( html_extensions.find(ext+1) )
-		url = FileToLoad;
-	else if(def_signatures.check_signature(FileToLoad, options.flags&OPT_SIGNSKIPSPACES))
-		url = FileToLoad;
-	if(url.IsEmpty() || url.Right(3)=="..\\")
-		return NULL;
-	return CComBSTR(url);
+    std::transform(value.begin(), value.end(), value.begin(),
+        [](wchar_t character) { return static_cast<wchar_t>(towlower(character)); });
+    return value;
 }
 
-void do_events()
+bool ExtensionListContains(const std::wstring& list, const std::wstring& extension)
 {
-	MSG msg;
-	BOOL result;
-
-	while (::PeekMessage(&msg, NULL, 0, 0, PM_NOREMOVE))
-	{
-		result = ::GetMessage(&msg, NULL, 0, 0);
-		if (result == 0) // WM_QUIT
-		{
-			::PostQuitMessage(msg.wParam);
-			break;
-		}
-		else if (result == -1)
-		{
-			// Handle errors/exit application, etc.
-		}
-		else
-		{
-			::TranslateMessage(&msg);
-			::DispatchMessage(&msg);
-		}
-	}
+    const std::wstring normalized = Lower(extension);
+    size_t position = 0;
+    while(position < list.size())
+    {
+        position = list.find_first_not_of(L"; ,\t\r\n", position);
+        if(position == std::wstring::npos)
+            break;
+        size_t end = list.find_first_of(L"; ,\t\r\n", position);
+        std::wstring item = list.substr(position,
+            end == std::wstring::npos ? std::wstring::npos : end - position);
+        if(Lower(item) == normalized)
+            return true;
+        if(end == std::wstring::npos)
+            break;
+        position = end + 1;
+    }
+    return false;
 }
 
-void prepare_browser(CBrowserHost* browser_host)
+bool IsMarkdownFile(const wchar_t* filename)
 {
-	browser_host->mWebBrowser->Navigate(L"about:blank", NULL, NULL, NULL, NULL);
-
-	// it's really a bad method, but in practice we won't have to wait, so 
-	// perhaps the loop will never get executed
-	READYSTATE rs;
-	do
-	{
-		browser_host->mWebBrowser->get_ReadyState(&rs);
-		do_events();
-	} while (rs != READYSTATE_COMPLETE);
+    if(!filename || !*filename)
+        return false;
+    DWORD attributes = GetFileAttributesW(filename);
+    if(attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY))
+        return false;
+    const wchar_t* separator = wcsrchr(filename, L'\\');
+    const wchar_t* alternate_separator = wcsrchr(filename, L'/');
+    if(!separator || alternate_separator && alternate_separator > separator)
+        separator = alternate_separator;
+    const wchar_t* dot = wcsrchr(filename, L'.');
+    if(!dot || separator && dot < separator || !dot[1])
+        return false;
+    EnsureConfiguration();
+    return ExtensionListContains(markdown_extensions, dot + 1);
 }
 
-void browser_show_file(CBrowserHost* browserHost, const char* filename, bool useDarkTheme)
+BOOL CALLBACK InitMarkdownRuntime(PINIT_ONCE, PVOID, PVOID*)
 {
-	CHAR css[MAX_PATH];
-	GetModuleFileName(hinst, css, MAX_PATH);
-	PathRemoveFileSpec(css);
-	strcat(css, "\\");
-	strcat(css, useDarkTheme ? html_template_dark : html_template);
+    std::wstring runtime_path = GetModulePath();
+    size_t separator = runtime_path.find_last_of(L"\\/");
+    if(separator == std::wstring::npos)
+    {
+        markdown_load_error = ERROR_PATH_NOT_FOUND;
+        return FALSE;
+    }
+    runtime_path.resize(separator + 1);
+#ifdef _WIN64
+    runtime_path += L"runtime\\x64\\Markdown-x64.dll";
+#else
+    runtime_path += L"runtime\\x86\\Markdown-x86.dll";
+#endif
 
-	Markdown md = Markdown();
-	std::string html = md.ConvertToHtmlAscii(std::string(filename), std::string(css), std::string(renderer_extensions));
+    markdown_module = LoadLibraryExW(runtime_path.c_str(), nullptr,
+        LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+    if(!markdown_module)
+    {
+        markdown_load_error = GetLastError();
+        return FALSE;
+    }
 
-	prepare_browser(browserHost);
-	browserHost->LoadWebBrowserFromStreamWrapper((const BYTE*)html.c_str(), html.length());
+    markdown_create_wpf_view = reinterpret_cast<MarkdownCreateWpfViewProc>(
+        GetProcAddress(markdown_module, "MarkdownCreateWpfView"));
+    markdown_load_wpf_view = reinterpret_cast<MarkdownLoadWpfViewProc>(
+        GetProcAddress(markdown_module, "MarkdownLoadWpfView"));
+    markdown_destroy_wpf_view = reinterpret_cast<MarkdownDestroyWpfViewProc>(
+        GetProcAddress(markdown_module, "MarkdownDestroyWpfView"));
+    markdown_focus_wpf_view = reinterpret_cast<MarkdownFocusWpfViewProc>(
+        GetProcAddress(markdown_module, "MarkdownFocusWpfView"));
+    markdown_command_wpf_view = reinterpret_cast<MarkdownCommandWpfViewProc>(
+        GetProcAddress(markdown_module, "MarkdownCommandWpfView"));
+    markdown_search_wpf_view = reinterpret_cast<MarkdownSearchWpfViewProc>(
+        GetProcAddress(markdown_module, "MarkdownSearchWpfView"));
+
+    if(!markdown_create_wpf_view || !markdown_load_wpf_view || !markdown_destroy_wpf_view ||
+        !markdown_focus_wpf_view || !markdown_command_wpf_view || !markdown_search_wpf_view)
+    {
+        markdown_load_error = ERROR_PROC_NOT_FOUND;
+        FreeLibrary(markdown_module);
+        markdown_module = nullptr;
+        return FALSE;
+    }
+    markdown_load_error = ERROR_SUCCESS;
+    return TRUE;
 }
 
-bool is_markdown(const char* FileToLoad)
+MarkdownWpfState* GetState(HWND window)
 {
-	CAtlString url;
-	char ext[MAX_PATH];
-	_splitpath(FileToLoad, NULL, NULL, NULL, ext);
-	strlwr(ext);
-
-	return markdown_extensions.find(ext + 1);
+    return reinterpret_cast<MarkdownWpfState*>(GetPropW(window, StateProperty));
 }
 
-int __stdcall ListLoadNext(HWND ParentWin, HWND PluginWin, char* FileToLoad, int ShowFlags)
+void ResizeView(HWND window)
 {
-	CComBSTR url = GetUrlFromFilename(FileToLoad);
-	if (url.Length() == 0 && !is_markdown(FileToLoad))
-		return LISTPLUGIN_ERROR;
-
-	CBrowserHost* browser_host = (CBrowserHost*)GetProp(PluginWin, PROP_BROWSER);
-	if(!browser_host)
-		return LISTPLUGIN_ERROR;
-	
-	StoreRefreshParams(FileToLoad, ParentWin, ShowFlags);
-	
-	if (is_markdown(FileToLoad))
-		browser_show_file(browser_host, FileToLoad, ShowFlags & lcp_darkmode);
-	else
-		browser_host->mWebBrowser->Navigate(url, NULL, NULL, NULL, NULL);
-
-	return LISTPLUGIN_OK;
+    MarkdownWpfState* state = GetState(window);
+    if(!state || !state->view_window)
+        return;
+    RECT client = {};
+    GetClientRect(window, &client);
+    MoveWindow(state->view_window, 0, 0, client.right, client.bottom, TRUE);
 }
 
-HWND __stdcall ListLoad(HWND ParentWin, char* FileToLoad, int ShowFlags)
+void ShowRendererError(HWND owner, HRESULT result)
 {
-	OleInitialize(NULL);
-	InitProc();
-
-	CComBSTR url = GetUrlFromFilename(FileToLoad);
-	
-	if (url.Length() == 0 && !is_markdown(FileToLoad))
-		return NULL;
-
-	RECT Rect;
-	GetClientRect(ParentWin, &Rect);
-
-	HWND ListWin;
-	HWND status;
-	HWND toolbar;
-	CBrowserHost* browser_host;
-	bool qiuck_view = WS_CHILD&GetWindowLong(ParentWin, GWL_STYLE);
-	bool need_toolbar = (!qiuck_view&&(options.toolbar&1))||(qiuck_view&&(options.toolbar&2));
-	bool need_statusbar = (!qiuck_view&&(options.status&1))||(qiuck_view&&(options.status&2));
-	
-	ListWin = CreateWindow(MAIN_WINDOW_CLASS, "IEViewMainWindow", WS_VISIBLE|WS_CHILD|WS_CLIPCHILDREN, 0, 0, Rect.right, Rect.bottom, ParentWin, NULL, hinst, NULL);
-	if(!ListWin)
-		return NULL;
-	if( need_statusbar )
-		status = CreateStatusWindow(WS_CHILD|WS_VISIBLE,"",ListWin,0);
-	else 
-		status = NULL;
-	SetProp(ListWin, PROP_STATUS, status);
-	if( need_toolbar )
-		toolbar = Create_Toolbar(ListWin);
-	else 
-		toolbar = NULL;
-	SetProp(ListWin, PROP_TOOLBAR, toolbar);
-	browser_host = new CBrowserHost;
-	
-	browser_host->mFocusType = qiuck_view?fctQuickView:fctLister;
-	if(!browser_host->CreateBrowser(ListWin))
-	{
-		DestroyWindow(ListWin);
-		return NULL;
-	}
-
-	StoreRefreshParams(FileToLoad, ParentWin, ShowFlags);
-
-	if(is_markdown(FileToLoad))
-		browser_show_file(browser_host, FileToLoad, ShowFlags & lcp_darkmode);
-	else
-		browser_host->mWebBrowser->Navigate(url, NULL, NULL, NULL, NULL);
-	
-	SetProp(ListWin, PROP_BROWSER, browser_host);
-	
-	if(/*!(options.flags&OPT_KEEPHOOKNOWINDOWS)&&*/hook_keyb==NULL/*&&num_lister_windows==0*/)
-		hook_keyb = SetWindowsHookEx(WH_KEYBOARD, HookKeybProc, hinst, (options.flags&OPT_GLOBALHOOK)?0:GetCurrentThreadId());
-	++num_lister_windows;
-
-	return ListWin;
+    wchar_t error_code[32] = {};
+    swprintf_s(error_code, L"0x%08X", static_cast<unsigned int>(result));
+    std::wstring message =
+        L"The .NET Framework 4.8 WPF Markdown renderer could not be loaded.\n\n"
+        L"Check that all files in runtime\\x86 or runtime\\x64 are present.\n"
+        L"Renderer error: ";
+    message += error_code;
+    MessageBoxW(owner, message.c_str(), L"MarkdownView", MB_OK | MB_ICONERROR);
 }
 
-void RefreshBrowser()
+std::wstring AnsiToWide(const char* value)
 {
-	ListLoad(ParentWinCopy, FileToLoadCopy, ShowFlagsCopy);
+    if(!value)
+        return std::wstring();
+    int length = MultiByteToWideChar(CP_ACP, 0, value, -1, nullptr, 0);
+    if(length <= 0)
+        return std::wstring();
+    std::vector<wchar_t> buffer(static_cast<size_t>(length));
+    if(!MultiByteToWideChar(CP_ACP, 0, value, -1, buffer.data(), length))
+        return std::wstring();
+    return std::wstring(buffer.data());
 }
 
-int __stdcall ListSendCommand(HWND ListWin,int Command,int Parameter)
+LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {
-	if(Command==lc_copy || Command==lc_selectall)
-	{
-		SendMessage(ListWin, WM_IEVIEW_COMMAND, Command, Parameter);
-		return LISTPLUGIN_OK;
-	}
-	return LISTPLUGIN_ERROR;
+    switch(message)
+    {
+        case WM_DESTROY:
+        {
+            MarkdownWpfState* state = GetState(window);
+            RemovePropW(window, StateProperty);
+            if(state)
+            {
+                if(markdown_destroy_wpf_view && state->view_window)
+                    markdown_destroy_wpf_view(state->view_window);
+                if(state->ole_initialized)
+                    OleUninitialize();
+                delete state;
+            }
+            return 0;
+        }
+        case WM_SIZE:
+            ResizeView(window);
+            return 0;
+        case WM_SETFOCUS:
+        {
+            MarkdownWpfState* state = GetState(window);
+            if(state && markdown_focus_wpf_view)
+                markdown_focus_wpf_view(state->view_window);
+            return 0;
+        }
+        case WM_ERASEBKGND:
+            return 1;
+    }
+    return DefWindowProcW(window, message, wparam, lparam);
+}
 }
 
-int _stdcall ListSearchText(HWND ListWin, char* SearchString, int SearchParameter)
+int __stdcall ListLoadNextW(HWND parent_window, HWND plugin_window, WCHAR* filename, int show_flags)
 {
-	SendMessage(ListWin, WM_IEVIEW_SEARCH, (WPARAM)SearchString, SearchParameter);
-	return LISTPLUGIN_OK;
+    MarkdownWpfState* state = GetState(plugin_window);
+    if(!state || !IsMarkdownFile(filename) || !markdown_load_wpf_view)
+        return LISTPLUGIN_ERROR;
+    HRESULT result = markdown_load_wpf_view(state->view_window, filename,
+        renderer_extensions.c_str(), (show_flags & lcp_darkmode) != 0);
+    if(FAILED(result))
+        return LISTPLUGIN_ERROR;
+    state->filename = filename;
+    state->lister_parent = parent_window;
+    state->show_flags = show_flags;
+    return LISTPLUGIN_OK;
 }
 
-int _stdcall ListSearchTextW(HWND ListWin, WCHAR* SearchString, int SearchParameter)
+int __stdcall ListLoadNext(HWND parent_window, HWND plugin_window, char* filename, int show_flags)
 {
-	SendMessage(ListWin, WM_IEVIEW_SEARCHW, (WPARAM)SearchString, SearchParameter);
-	return LISTPLUGIN_OK;
+    std::wstring wide_filename = AnsiToWide(filename);
+    return wide_filename.empty()
+        ? LISTPLUGIN_ERROR
+        : ListLoadNextW(parent_window, plugin_window, &wide_filename[0], show_flags);
 }
 
-void __stdcall ListCloseWindow(HWND ListWin)
+HWND __stdcall ListLoadW(HWND parent_window, WCHAR* filename, int show_flags)
 {
-    DestroyWindow(ListWin);
-	OleUninitialize();
+    if(!IsMarkdownFile(filename))
+        return nullptr;
 
-	--num_lister_windows;
-	if(!(options.flags&OPT_KEEPHOOKNOWINDOWS)&&hook_keyb&&num_lister_windows==0)
-	{
-		UnhookWindowsHookEx(hook_keyb);
-		hook_keyb = NULL;
-	}
-	return;
+    HRESULT ole_result = OleInitialize(nullptr);
+    if(FAILED(ole_result))
+        return nullptr;
+
+    if(!InitOnceExecuteOnce(&markdown_runtime_once, InitMarkdownRuntime, nullptr, nullptr) ||
+        !markdown_create_wpf_view)
+    {
+        ShowRendererError(parent_window, HRESULT_FROM_WIN32(markdown_load_error));
+        OleUninitialize();
+        return nullptr;
+    }
+
+    RECT client = {};
+    GetClientRect(parent_window, &client);
+    HWND plugin_window = CreateWindowExW(WS_EX_CONTROLPARENT, WindowClassName, L"MarkdownView",
+        WS_VISIBLE | WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+        0, 0, client.right, client.bottom, parent_window, nullptr, instance, nullptr);
+    if(!plugin_window)
+    {
+        OleUninitialize();
+        return nullptr;
+    }
+
+    HWND view_window = nullptr;
+    HRESULT result = markdown_create_wpf_view(plugin_window, filename,
+        renderer_extensions.c_str(), (show_flags & lcp_darkmode) != 0, &view_window);
+    if(FAILED(result) || !view_window)
+    {
+        ShowRendererError(plugin_window, result);
+        DestroyWindow(plugin_window);
+        OleUninitialize();
+        return nullptr;
+    }
+
+    MarkdownWpfState* state = new MarkdownWpfState;
+    state->view_window = view_window;
+    state->lister_parent = parent_window;
+    state->filename = filename;
+    state->show_flags = show_flags;
+    state->ole_initialized = true;
+    SetPropW(plugin_window, StateProperty, state);
+    ResizeView(plugin_window);
+    return plugin_window;
 }
 
-int __stdcall ListPrint(HWND ListWin,char* FileToPrint,char* DefPrinter,int PrintFlags,RECT* Margins)
+HWND __stdcall ListLoad(HWND parent_window, char* filename, int show_flags)
 {
-	SendMessage(ListWin, WM_IEVIEW_PRINT, (WPARAM)FileToPrint,0);
-	return LISTPLUGIN_OK;
+    std::wstring wide_filename = AnsiToWide(filename);
+    return wide_filename.empty() ? nullptr : ListLoadW(parent_window, &wide_filename[0], show_flags);
 }
 
-BOOL APIENTRY DllMain( HANDLE hModule, DWORD  reason_for_call, LPVOID lpReserved)
+int __stdcall ListSendCommand(HWND plugin_window, int command, int)
 {
-	if(reason_for_call==DLL_PROCESS_ATTACH)
-	{
-		hinst = (HINSTANCE)hModule;
-		num_lister_windows = 0;
-		WNDCLASS wc = {	0,//CS_HREDRAW | CS_VREDRAW,
-						(WNDPROC)WndProc,0,0,hinst,NULL,
-						LoadCursor(NULL, IDC_ARROW),
-						NULL,NULL,MAIN_WINDOW_CLASS};
-		RegisterClass(&wc);
-	}
-	else if(reason_for_call==DLL_PROCESS_DETACH)
-	{
-		if(hook_keyb)
-			UnhookWindowsHookEx(hook_keyb);
-		if(img_list)
-			ImageList_Destroy(img_list);
-	}
-	return TRUE;
+    MarkdownWpfState* state = GetState(plugin_window);
+    if(!state || !markdown_command_wpf_view)
+        return LISTPLUGIN_ERROR;
+    if(command == lc_selectall)
+        markdown_command_wpf_view(state->view_window, 1);
+    else if(command == lc_copy)
+        markdown_command_wpf_view(state->view_window, 2);
+    else
+        return LISTPLUGIN_ERROR;
+    return LISTPLUGIN_OK;
+}
+
+int __stdcall ListSearchTextW(HWND plugin_window, WCHAR* search, int search_flags)
+{
+    MarkdownWpfState* state = GetState(plugin_window);
+    if(!state || !search || !markdown_search_wpf_view)
+        return LISTPLUGIN_ERROR;
+    return markdown_search_wpf_view(state->view_window, search, search_flags) == S_OK
+        ? LISTPLUGIN_OK
+        : LISTPLUGIN_ERROR;
+}
+
+int __stdcall ListSearchText(HWND plugin_window, char* search, int search_flags)
+{
+    std::wstring wide_search = AnsiToWide(search);
+    return wide_search.empty()
+        ? LISTPLUGIN_ERROR
+        : ListSearchTextW(plugin_window, &wide_search[0], search_flags);
+}
+
+void __stdcall ListCloseWindow(HWND plugin_window)
+{
+    if(plugin_window)
+        DestroyWindow(plugin_window);
+}
+
+int __stdcall ListPrint(HWND, char*, char*, int, RECT*)
+{
+    return LISTPLUGIN_ERROR;
+}
+
+int __stdcall ListPrintW(HWND, WCHAR*, WCHAR*, int, RECT*)
+{
+    return LISTPLUGIN_ERROR;
+}
+
+BOOL APIENTRY DllMain(HANDLE module, DWORD reason, LPVOID)
+{
+    if(reason == DLL_PROCESS_ATTACH)
+    {
+        instance = static_cast<HINSTANCE>(module);
+        DisableThreadLibraryCalls(instance);
+        WNDCLASSW window_class = {};
+        window_class.lpfnWndProc = WindowProc;
+        window_class.hInstance = instance;
+        window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
+        window_class.lpszClassName = WindowClassName;
+        if(!RegisterClassW(&window_class) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+            return FALSE;
+    }
+    return TRUE;
 }

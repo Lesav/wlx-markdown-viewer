@@ -1,62 +1,181 @@
 #pragma once
-#include <msclr\auto_gcroot.h>
+#include <objbase.h>
 
 #define MAKEDLL TRUE
 #include "markdown.h"
 
+#ifdef _WIN64
+#pragma comment(linker, "/EXPORT:MarkdownCreateWpfView")
+#pragma comment(linker, "/EXPORT:MarkdownLoadWpfView")
+#pragma comment(linker, "/EXPORT:MarkdownDestroyWpfView")
+#pragma comment(linker, "/EXPORT:MarkdownFocusWpfView")
+#pragma comment(linker, "/EXPORT:MarkdownCommandWpfView")
+#pragma comment(linker, "/EXPORT:MarkdownSearchWpfView")
+#else
+#pragma comment(linker, "/EXPORT:MarkdownCreateWpfView=_MarkdownCreateWpfView@20")
+#pragma comment(linker, "/EXPORT:MarkdownLoadWpfView=_MarkdownLoadWpfView@16")
+#pragma comment(linker, "/EXPORT:MarkdownDestroyWpfView=_MarkdownDestroyWpfView@4")
+#pragma comment(linker, "/EXPORT:MarkdownFocusWpfView=_MarkdownFocusWpfView@4")
+#pragma comment(linker, "/EXPORT:MarkdownCommandWpfView=_MarkdownCommandWpfView@8")
+#pragma comment(linker, "/EXPORT:MarkdownSearchWpfView=_MarkdownSearchWpfView@12")
+#endif
+
+using namespace System;
+using namespace System::IO;
+using namespace System::Reflection;
 using namespace System::Runtime::InteropServices;
 
-static System::String^ MarkdownToHtml(
-	System::String^ filename,
-	System::String^ cssFile,
-	System::String^ extensions
-) {
+private ref class WpfBridgeState abstract sealed
+{
+public:
+	static Type^ HostType = nullptr;
+	static String^ RuntimeDirectory = nullptr;
 
-	System::String^ source = System::IO::File::ReadAllText(filename);
+	static Assembly^ ResolveAssembly(Object^, ResolveEventArgs^ arguments)
+	{
+		String^ simpleName = (gcnew AssemblyName(arguments->Name))->Name;
+		String^ path = Path::Combine(RuntimeDirectory, simpleName + ".dll");
+		return File::Exists(path) ? Assembly::LoadFrom(path) : nullptr;
+	}
+};
 
-	Markdig::MarkdownParserContext^ context = nullptr;
-	Markdig::MarkdownPipelineBuilder^ builder = gcnew Markdig::MarkdownPipelineBuilder();
-	Markdig::MarkdownExtensions::Configure(builder, extensions);
-
-	System::Text::StringBuilder^ sb = gcnew System::Text::StringBuilder(1000);
-	sb->AppendLine("<html><head>");
-	sb->AppendLine("<meta charset='utf-8'>");
-	sb->AppendLine("<meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">");
-	sb->Append("<base href=\"file:///")
-		->Append(System::IO::Path::GetDirectoryName(filename)->Replace("\\", "/"))
-		->AppendLine("/\"/>");
-
-	sb->Append("<style>");
-	sb->Append(System::IO::File::ReadAllText(cssFile));
-	sb->Append("</style>");
-	sb->AppendLine("</head>");
-	sb->AppendLine("<body>");
-	sb->AppendLine(Markdig::Markdown::ToHtml(source, builder->Build(), context));
-	sb->AppendLine("</body>");
-	sb->AppendLine("</html>");
-
-	return sb->ToString();
+static Type^ GetWpfHostType()
+{
+	if(WpfBridgeState::HostType == nullptr)
+	{
+		String^ bridgeDirectory = Path::GetDirectoryName(Assembly::GetExecutingAssembly()->Location);
+		WpfBridgeState::RuntimeDirectory = bridgeDirectory;
+		AppDomain::CurrentDomain->AssemblyResolve +=
+			gcnew ResolveEventHandler(&WpfBridgeState::ResolveAssembly);
+		String^ viewerPath = Path::Combine(bridgeDirectory, "Markdown.Wpf.dll");
+		Assembly^ viewerAssembly = Assembly::LoadFrom(viewerPath);
+		WpfBridgeState::HostType = viewerAssembly->GetType("MarkdownView.Wpf.WpfViewerHost", true);
+	}
+	return WpfBridgeState::HostType;
 }
 
-Markdown::Markdown() {
+static Object^ InvokeWpfHost(String^ method, array<Object^>^ arguments)
+{
+	return GetWpfHostType()->InvokeMember(method,
+		BindingFlags::Public | BindingFlags::Static | BindingFlags::InvokeMethod,
+		nullptr, nullptr, arguments);
 }
 
-std::string __stdcall Markdown::ConvertToHtmlAscii(
-	std::string filename,
-	std::string cssFile,
-	std::string extensions
-) {
-	System::String^ result = MarkdownToHtml(
-		gcnew System::String(filename.c_str()),
-		gcnew System::String(cssFile.c_str()),
-		gcnew System::String(extensions.c_str())
-	);
-
-	array<unsigned char>^ data = System::Text::Encoding::UTF8->GetBytes(result);
-	pin_ptr<unsigned char> pp = &data[0];
-
-	std::string str((char*)pp, data->Length);
-	return str;
+static HRESULT ExceptionToHResult(Exception^ exception)
+{
+	while(exception->InnerException != nullptr && dynamic_cast<TargetInvocationException^>(exception) != nullptr)
+		exception = exception->InnerException;
+	return Marshal::GetHRForException(exception);
 }
 
-Markdown::~Markdown() {}
+extern "C" HRESULT __stdcall MarkdownCreateWpfView(
+	HWND parentWindow,
+	const wchar_t* filename,
+	const wchar_t* extensions,
+	BOOL darkMode,
+	HWND* viewWindow)
+{
+	if(!parentWindow || !filename || !extensions || !viewWindow)
+		return E_INVALIDARG;
+	*viewWindow = NULL;
+	try
+	{
+		IntPtr handle = safe_cast<IntPtr>(InvokeWpfHost("Create", gcnew array<Object^> {
+			IntPtr(parentWindow), gcnew String(filename), gcnew String(extensions), darkMode != FALSE
+		}));
+		*viewWindow = static_cast<HWND>(handle.ToPointer());
+		return *viewWindow ? S_OK : E_FAIL;
+	}
+	catch(Exception^ exception)
+	{
+		return ExceptionToHResult(exception);
+	}
+}
+
+extern "C" HRESULT __stdcall MarkdownLoadWpfView(
+	HWND viewWindow,
+	const wchar_t* filename,
+	const wchar_t* extensions,
+	BOOL darkMode)
+{
+	if(!viewWindow || !filename || !extensions)
+		return E_INVALIDARG;
+	try
+	{
+		bool loaded = safe_cast<bool>(InvokeWpfHost("Load", gcnew array<Object^> {
+			IntPtr(viewWindow), gcnew String(filename), gcnew String(extensions), darkMode != FALSE
+		}));
+		return loaded ? S_OK : E_FAIL;
+	}
+	catch(Exception^ exception)
+	{
+		return ExceptionToHResult(exception);
+	}
+}
+
+extern "C" void __stdcall MarkdownDestroyWpfView(HWND viewWindow)
+{
+	if(!viewWindow)
+		return;
+	try
+	{
+		InvokeWpfHost("Destroy", gcnew array<Object^> { IntPtr(viewWindow) });
+	}
+	catch(Exception^)
+	{
+	}
+}
+
+extern "C" void __stdcall MarkdownFocusWpfView(HWND viewWindow)
+{
+	if(!viewWindow)
+		return;
+	try
+	{
+		InvokeWpfHost("Focus", gcnew array<Object^> { IntPtr(viewWindow) });
+	}
+	catch(Exception^)
+	{
+	}
+}
+
+extern "C" void __stdcall MarkdownCommandWpfView(HWND viewWindow, int command)
+{
+	if(!viewWindow)
+		return;
+	try
+	{
+		if(command == 1)
+			InvokeWpfHost("SelectAll", gcnew array<Object^> { IntPtr(viewWindow) });
+		else if(command == 2)
+			InvokeWpfHost("Copy", gcnew array<Object^> { IntPtr(viewWindow) });
+		else if(command == 3)
+			InvokeWpfHost("Zoom", gcnew array<Object^> { IntPtr(viewWindow), 10 });
+		else if(command == 4)
+			InvokeWpfHost("Zoom", gcnew array<Object^> { IntPtr(viewWindow), -10 });
+		else if(command == 5)
+			InvokeWpfHost("Zoom", gcnew array<Object^> { IntPtr(viewWindow), safe_cast<Object^>(Int32(0)) });
+	}
+	catch(Exception^)
+	{
+	}
+}
+
+extern "C" HRESULT __stdcall MarkdownSearchWpfView(
+	HWND viewWindow,
+	const wchar_t* searchText,
+	int searchFlags)
+{
+	if(!viewWindow || !searchText)
+		return E_INVALIDARG;
+	try
+	{
+		return safe_cast<bool>(InvokeWpfHost("Find", gcnew array<Object^> {
+			IntPtr(viewWindow), gcnew String(searchText), searchFlags
+		})) ? S_OK : S_FALSE;
+	}
+	catch(Exception^ exception)
+	{
+		return ExceptionToHResult(exception);
+	}
+}

@@ -1,0 +1,174 @@
+# MarkdownView 2.9.1 — тестовый документ
+
+Этот файл проверяет основные возможности WLX-плагина MarkdownView для Total Commander.
+Документ обрабатывается локально через Markdig и отображается как WPF `FlowDocument`.
+WebView2, Internet Explorer, JavaScript, PHP и сетевой браузерный движок не используются.
+
+## Проверка управления
+
+1. Откройте `TEST.md` в Total Commander клавишей **F3**.
+2. Убедитесь, что документ появляется без пустого промежуточного окна.
+3. Проверьте выделение и копирование текста.
+4. Выполните поиск через Lister и повторите поиск вперёд и назад.
+5. Нажмите **Esc** — окно Lister должно закрыться.
+6. Повторите проверку в светлой и тёмной теме.
+
+## Заголовки
+
+### Заголовок третьего уровня
+
+#### Заголовок четвёртого уровня
+
+##### Заголовок пятого уровня
+
+###### Заголовок шестого уровня
+
+Заголовок Setext H1
+===================
+
+Заголовок Setext H2
+-------------------
+
+## Абзацы и строчная разметка
+
+Это обычный абзац с русским и English text.\
+Эта строка отделена принудительным переносом.
+
+**Жирный текст**, *курсив*, ***жирный курсив*** и ~~зачёркнутый текст~~.
+
+Строчный код: `MarkdownView.wlx64`. Подчёркивания внутри имени
+`browser_engine_removed` не должны менять форматирование.
+
+Экранированные символы: \*звёздочки\*, \_подчёркивания\_, \# решётка и \| черта.
+
+Emoji из расширения Markdig: :white_check_mark: :warning: :rocket:
+
+Встроенный HTML отключён и не должен создавать элемент интерфейса:
+
+<button>Это текст, а не HTML-кнопка</button>
+
+## Ссылки
+
+- [README проекта](Readme.md)
+- [История версий](CANGELOG.md)
+- [Происхождение Mermaider](ThirdParty/Mermaider/UPSTREAM.md)
+- [Внешняя тестовая ссылка](https://example.com)
+
+## Списки
+
+- Первый пункт
+- Второй пункт
+  - Вложенный пункт
+  - Ещё один вложенный пункт
+- Многострочный пункт,
+  продолженный на следующей строке
+
+1. Первый нумерованный пункт
+2. Второй нумерованный пункт
+   1. Вложенный пункт
+   2. Второй вложенный пункт
+3. Третий пункт
+
+## Список задач
+
+- [x] Markdown открывается через F3
+- [x] WebView2 не требуется
+- [ ] Проверить закрытие окна по Esc
+- [ ] Проверить контраст тёмной темы
+
+## Цитаты
+
+> MarkdownView отображает Markdown локально.
+>
+> > Вложенная цитата проверяет второй уровень.
+
+## Блоки кода
+
+### C++
+
+```cpp
+HWND __stdcall ListLoadW(HWND parent, WCHAR* fileName, int showFlags)
+{
+    return OpenMarkdownViewer(parent, fileName, showFlags);
+}
+```
+
+### C#
+
+```csharp
+var document = new FlowDocument
+{
+    Background = Brushes.Black,
+    Foreground = Brushes.White,
+};
+```
+
+### PowerShell
+
+```powershell
+$package = 'dist\MarkdownView-2.9.1.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath $package
+```
+
+### CMD
+
+```batch
+@echo off
+call BuildMakeSetup.bat
+```
+
+Блок с отступом:
+
+    MarkdownView.wlx
+    MarkdownView.wlx64
+
+## Таблица
+
+| Компонент | Назначение | Требуется пользователю |
+|:----------|:-----------|:----------------------:|
+| MarkdownView.wlx/wlx64 | Нативный WLX-хост | Да |
+| Markdown-x86/x64.dll | C++/CLI-мост | Да |
+| Markdown.Wpf.dll | WPF-рендерер | Да |
+| Mermaider.dll | Локальные Mermaid-диаграммы | Да |
+| WebView2 Runtime | Браузерный движок | Нет |
+
+## Mermaid
+
+Диаграмма должна строиться локально и оставаться читаемой в обеих темах.
+
+```mermaid
+flowchart LR
+    TC[Total Commander] --> WLX[MarkdownView WLX]
+    WLX --> Bridge[C++/CLI bridge]
+    Bridge --> WPF[WPF FlowDocument]
+    WPF --> Text[Markdown]
+    WPF --> Mermaid[Mermaid SVG]
+```
+
+```mermaid
+sequenceDiagram
+    participant TC as Total Commander
+    participant WLX as MarkdownView
+    participant WPF as WPF renderer
+    TC->>WLX: ListLoadW(TEST.md)
+    WLX->>WPF: Create and render
+    WPF-->>TC: Viewer window
+    TC->>WLX: Esc / close
+```
+
+## Горизонтальные разделители
+
+---
+
+***
+
+## Длинный текст для прокрутки
+
+Этот раздел нужен для проверки вертикальной прокрутки, выделения текста на нескольких
+строках и сохранения контраста. Просмотрщик должен использовать фон и цвет документа
+из одной темы. Основной текст, заголовки, ссылки, цитаты, таблицы и код должны отчётливо
+различаться. Горизонтальная полоса прокрутки у основного документа не требуется.
+
+Повтор поиска: MarkdownView, MarkdownView, markdownview, MARKDOWNVIEW.
+
+Конец тестового документа.
