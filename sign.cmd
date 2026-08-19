@@ -5,11 +5,12 @@ setlocal EnableDelayedExpansion
 
 rem --- Параметры по умолчанию ------------------------------------------------
 rem Отпечатки код-подписывающих сертификатов (SHA-1, hex, регистр не важен).
-set "THUMBPRINT_SHA1=1e50512341554b70671f922f4a027d4ef035626c"
-set "THUMBPRINT_SHA256=9fff57ffc87eea6b34cd196dba95436c217baebf"
+rem Значения можно переопределить через окружение, например в CI.
+if not defined THUMBPRINT_SHA1 set "THUMBPRINT_SHA1=1e50512341554b70671f922f4a027d4ef035626c"
+if not defined THUMBPRINT_SHA256 set "THUMBPRINT_SHA256=9fff57ffc87eea6b34cd196dba95436c217baebf"
 
 rem Хранилище сертификата: CurrentUser\My (без прав админа) или LocalMachine\My.
-set "STORE=CurrentUser"
+if not defined STORE set "STORE=CurrentUser"
 
 rem Путь к signtool.exe (Windows SDK). Можно переопределить через окружение.
 if not defined SIGNTOOL set "SIGNTOOL=C:\Proj\jCjS2\_dest_dir\utils\signTools\signtool.exe"
@@ -23,6 +24,7 @@ set "TMS2=http://timestamp.digicert.com?alg=sha256"
 rem --- Разбор аргументов -----------------------------------------------------
 set "TARGET=%~1"
 if "%TARGET%"=="" goto :usage
+if /i "%TARGET%"=="--check" goto :check_signing
 if not exist "%TARGET%" (
     echo [sign] ERROR: файл не найден: %TARGET%
     exit /b 2
@@ -53,6 +55,28 @@ rem --- Подпись ---------------------------------------------------------
 if "!KIND!"=="ps" goto :sign_ps
 if "!KIND!"=="pe" goto :sign_pe
 goto :eof
+
+rem ============================================================================
+rem  Проверка готовности подписи пакета. Сборщик вызывает этот режим до обхода
+rem  PE-файлов и полностью пропускает подпись, если отсутствует хотя бы один
+rem  сертификат или signtool.exe.
+rem ============================================================================
+:check_signing
+if not exist "%SIGNTOOL%" (
+    echo [sign] Подпись недоступна: signtool.exe не найден: %SIGNTOOL%
+    endlocal
+    exit /b 10
+)
+
+powershell -NoProfile -Command "$required = @('%THUMBPRINT_SHA1%', '%THUMBPRINT_SHA256%'); $certificates = @(Get-ChildItem Cert:\%STORE%\My -ErrorAction SilentlyContinue | Where-Object { $_.HasPrivateKey -and ($_.EnhancedKeyUsageList.ObjectId.Value -contains '1.3.6.1.5.5.7.3.3') }); $missing = @($required | Where-Object { $thumbprint = $_; -not ($certificates | Where-Object { $_.Thumbprint -eq $thumbprint }) }); if ($missing.Count -gt 0) { Write-Host ('[sign] Подпись недоступна: сертификаты с закрытым ключом не найдены в %STORE%\My: ' + ($missing -join ', ')); exit 1 }"
+if errorlevel 1 (
+    endlocal
+    exit /b 10
+)
+
+echo [sign] Подпись доступна: оба сертификата и signtool.exe найдены.
+endlocal
+exit /b 0
 
 rem ============================================================================
 rem  PowerShell-скрипты (.ps1): ОДНА подпись SHA256 + метка времени TMS1.
@@ -140,8 +164,10 @@ goto :eof
 
 :usage
 echo Использование: sign.cmd ^<файл^>
+echo                sign.cmd --check
 echo.
 echo   файл — путь к подписываемому файлу (.ps1 .exe .dll .msi .cab)
+echo   --check — проверить наличие обоих сертификатов и signtool.exe
 echo.
 echo Логика:
 echo   .ps1               — одна подпись SHA256 + метка времени TMS2

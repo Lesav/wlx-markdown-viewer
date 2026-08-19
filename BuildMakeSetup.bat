@@ -4,7 +4,7 @@ setlocal EnableExtensions
 
 cd /d "%~dp0"
 
-set "VERSION=2.9.2"
+set "VERSION=2.9.3"
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 set "RESTORE_SOURCES=https://api.nuget.org/v3/index.json"
 
@@ -74,10 +74,16 @@ if errorlevel 1 exit /b 1
 call :BuildArchitecture x64 x64 MarkdownView.wlx64 Markdown-x64.dll
 if errorlevel 1 exit /b 1
 
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0SignUnsignedPe.ps1" -Root "%PACKAGE_DIR%" -SignCommand "%~dp0sign.cmd"
+call "%~dp0sign.cmd" --check
 if errorlevel 1 (
-    echo ERROR: Failed to sign package PE files.
-    exit /b 1
+    echo.
+    echo WARNING: Code-signing certificates are unavailable; creating an unsigned package.
+) else (
+    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0SignUnsignedPe.ps1" -Root "%PACKAGE_DIR%" -SignCommand "%~dp0sign.cmd"
+    if errorlevel 1 (
+        echo ERROR: Failed to sign package PE files.
+        exit /b 1
+    )
 )
 
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "Add-Type -AssemblyName System.IO.Compression.FileSystem; [IO.Compression.ZipFile]::CreateFromDirectory($env:PACKAGE_DIR, $env:ZIP_PATH, [IO.Compression.CompressionLevel]::Optimal, $false)"

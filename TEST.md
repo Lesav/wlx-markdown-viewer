@@ -1,4 +1,4 @@
-# MarkdownView 2.9.2 — тестовый документ
+# MarkdownView 2.9.3 — тестовый документ
 
 Этот файл проверяет основные возможности WLX-плагина MarkdownView для Total Commander
 и Double Commander под Windows.
@@ -108,7 +108,7 @@ var document = new FlowDocument
 ### PowerShell
 
 ```powershell
-$package = 'dist\MarkdownView-2.9.2.zip'
+$package = 'dist\MarkdownView-2.9.3.zip'
 Get-FileHash -Algorithm SHA256 -LiteralPath $package
 ```
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.9.3 - 2026-08-19
+
+- Made package signing conditional: `BuildMakeSetup.bat` now creates an unsigned package when the
+  configured certificates or `signtool.exe` are unavailable.
+- Added `sign.cmd --check` and environment overrides for certificate thumbprints and store.
+
 ## 2.9.2 - 2026-08-19
 
 - Added explicit Windows support for Double Commander using its Total Commander-compatible WLX API.

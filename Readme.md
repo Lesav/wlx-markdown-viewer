@@ -1,6 +1,6 @@
 # Markdown Lister Plugin for Total Commander and Double Commander (32/64-bit)
 
-Current release: **2.9.2**.
+Current release: **2.9.3**.
 
 MarkdownView is based on the [wlx-markdown-viewer plugin](https://github.com/rg-software/wlx-markdown-viewer).
 Markdown files are parsed with [Markdig](https://github.com/xoofx/markdig) and displayed as a WPF
@@ -77,9 +77,12 @@ from a directory named `MarkdownView`. Files that are still locked are renamed b
 
 ## Building
 
-Run `BuildMakeSetup.bat` to restore dependencies, build x86 and x64, Authenticode-sign every
-unsigned PE file and create `dist\MarkdownView-<version>.zip`. All intermediate build outputs and
-package staging files are kept under `tmp\`.
+Run `BuildMakeSetup.bat` to restore dependencies, build x86 and x64 and create
+`dist\MarkdownView-<version>.zip`. Before signing, the build checks that `signtool.exe` and both
+configured code-signing certificates are available. If they are found, every unsigned PE file is
+Authenticode-signed; otherwise an unsigned package is created with a warning. The certificate
+thumbprints, store and `signtool.exe` path can be overridden through the environment for CI. All
+intermediate build outputs and package staging files are kept under `tmp\`.
 
 The build requires Visual Studio 2022 or Build Tools with the C++ workload, the .NET Framework 4.8
 targeting pack, a current .NET SDK for the SDK-style projects, and Internet access for NuGet

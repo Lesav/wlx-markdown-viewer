@@ -1,6 +1,6 @@
 [plugininstall]
 description=Markdown Viewer for Total/Double Commander
-version=2.9.2
+version=2.9.3
 type=wlx
 file=MarkdownView.wlx
 file64=MarkdownView.wlx64
