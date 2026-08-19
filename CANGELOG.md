@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.9.2 - 2026-08-19
+
+- Added explicit Windows support for Double Commander using its Total Commander-compatible WLX API.
+- Added `ListGetDetectString` with detection rules generated from the configured Markdown extensions.
+- Removed the unsupported `ListPrint` and `ListPrintW` exports so hosts no longer expose a non-functional print command.
+- Added explicit x86/x64 plugin entries to `pluginst.inf` for automatic installation in compatible hosts.
+- Added Double Commander installation and compatibility checks to the documentation and test document.
+
 ## 2.9.1 - 2026-08-19
 
 - Removed the optional HTML viewer, WebView2 SDK, legacy Internet Explorer/ActiveX host and all browser-specific source code.

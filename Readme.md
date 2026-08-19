@@ -1,6 +1,6 @@
-# Markdown Lister Plugin for Total Commander (32/64-bit)
+# Markdown Lister Plugin for Total Commander and Double Commander (32/64-bit)
 
-Current release: **2.9.1**.
+Current release: **2.9.2**.
 
 MarkdownView is based on the [wlx-markdown-viewer plugin](https://github.com/rg-software/wlx-markdown-viewer).
 Markdown files are parsed with [Markdig](https://github.com/xoofx/markdig) and displayed as a WPF
@@ -48,11 +48,28 @@ Configuration is stored in `MarkdownView.ini`:
 
 ## Setup
 
-The combined archive contains `MarkdownView.wlx` for 32-bit Total Commander and
-`MarkdownView.wlx64` for 64-bit Total Commander. Open the ZIP in Total Commander and confirm the
-plugin installation; Total Commander selects the correct architecture automatically. The archive
-also contains `TEST.md` for checking F3, Esc, search, themes and Markdown/Mermaid rendering after
-installation.
+The combined archive contains `MarkdownView.wlx` for 32-bit Total Commander or Double Commander
+and `MarkdownView.wlx64` for their 64-bit editions on Windows. The archive also contains
+`TEST.md` for checking F3, Esc, search, themes and Markdown/Mermaid rendering after installation.
+
+### Total Commander
+
+Open the ZIP in Total Commander and confirm the plugin installation. Total Commander selects the
+correct architecture automatically.
+
+### Double Commander
+
+For automatic installation, run Double Commander's internal command `cm_AddPlugin` and select
+the installation ZIP. For manual installation, extract the archive, open
+**Configuration → Options → Plugins → WLX → Add**, and select the architecture-matching file:
+
+- `MarkdownView.wlx64` for 64-bit Double Commander;
+- `MarkdownView.wlx` for 32-bit Double Commander.
+
+The plugin exports a WLX detection string generated from `MarkdownExtensions`, so Double
+Commander can associate all configured Markdown extensions automatically. Keep the `runtime`
+directory beside the WLX files. This build is Windows-only because its renderer uses WPF and
+.NET Framework 4.8.
 
 `MarkdownView-drop.cmd` removes files from an installed plugin directory. For safety it runs only
 from a directory named `MarkdownView`. Files that are still locked are renamed by appending
@@ -70,5 +87,6 @@ restore. End users do not need these build tools or an additional runtime.
 
 ## Testing
 
-Open `TEST.md` with F3 in Total Commander to check Markdown rendering, dark-theme contrast,
-selection, copy, search, local Mermaid diagrams and closing Lister with Esc.
+Open `TEST.md` with F3 in Total Commander or Double Commander to check Markdown rendering,
+Quick View, dark-theme contrast, selection, copy, search, local Mermaid diagrams and closing
+Lister with Esc.

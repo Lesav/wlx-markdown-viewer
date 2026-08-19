@@ -117,6 +117,49 @@ bool ExtensionListContains(const std::wstring& list, const std::wstring& extensi
     return false;
 }
 
+bool IsDetectExtensionCharacter(wchar_t character)
+{
+    return character >= L'a' && character <= L'z' ||
+        character >= L'A' && character <= L'Z' ||
+        character >= L'0' && character <= L'9' ||
+        character == L'_' || character == L'-';
+}
+
+std::string BuildDetectString()
+{
+    EnsureConfiguration();
+    std::string result;
+    size_t position = 0;
+    while(position < markdown_extensions.size())
+    {
+        position = markdown_extensions.find_first_not_of(L"; ,\t\r\n", position);
+        if(position == std::wstring::npos)
+            break;
+        size_t end = markdown_extensions.find_first_of(L"; ,\t\r\n", position);
+        std::wstring extension = markdown_extensions.substr(position,
+            end == std::wstring::npos ? std::wstring::npos : end - position);
+        bool safe = !extension.empty() && std::all_of(extension.begin(), extension.end(),
+            IsDetectExtensionCharacter);
+        if(safe)
+        {
+            if(!result.empty())
+                result += " | ";
+            result += "EXT=\"";
+            for(wchar_t character : extension)
+            {
+                if(character >= L'a' && character <= L'z')
+                    character = character - L'a' + L'A';
+                result.push_back(static_cast<char>(character));
+            }
+            result += "\"";
+        }
+        if(end == std::wstring::npos)
+            break;
+        position = end + 1;
+    }
+    return result;
+}
+
 bool IsMarkdownFile(const wchar_t* filename)
 {
     if(!filename || !*filename)
@@ -370,20 +413,18 @@ int __stdcall ListSearchText(HWND plugin_window, char* search, int search_flags)
         : ListSearchTextW(plugin_window, &wide_search[0], search_flags);
 }
 
+void __stdcall ListGetDetectString(char* detect_string, int max_length)
+{
+    if(!detect_string || max_length <= 0)
+        return;
+    const std::string value = BuildDetectString();
+    strncpy_s(detect_string, static_cast<size_t>(max_length), value.c_str(), _TRUNCATE);
+}
+
 void __stdcall ListCloseWindow(HWND plugin_window)
 {
     if(plugin_window)
         DestroyWindow(plugin_window);
-}
-
-int __stdcall ListPrint(HWND, char*, char*, int, RECT*)
-{
-    return LISTPLUGIN_ERROR;
-}
-
-int __stdcall ListPrintW(HWND, WCHAR*, WCHAR*, int, RECT*)
-{
-    return LISTPLUGIN_ERROR;
 }
 
 BOOL APIENTRY DllMain(HANDLE module, DWORD reason, LPVOID)

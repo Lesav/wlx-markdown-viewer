@@ -1,17 +1,19 @@
-# MarkdownView 2.9.1 — тестовый документ
+# MarkdownView 2.9.2 — тестовый документ
 
-Этот файл проверяет основные возможности WLX-плагина MarkdownView для Total Commander.
+Этот файл проверяет основные возможности WLX-плагина MarkdownView для Total Commander
+и Double Commander под Windows.
 Документ обрабатывается локально через Markdig и отображается как WPF `FlowDocument`.
 WebView2, Internet Explorer, JavaScript, PHP и сетевой браузерный движок не используются.
 
 ## Проверка управления
 
-1. Откройте `TEST.md` в Total Commander клавишей **F3**.
+1. Откройте `TEST.md` в Total Commander или Double Commander клавишей **F3**.
 2. Убедитесь, что документ появляется без пустого промежуточного окна.
 3. Проверьте выделение и копирование текста.
 4. Выполните поиск через Lister и повторите поиск вперёд и назад.
 5. Нажмите **Esc** — окно Lister должно закрыться.
-6. Повторите проверку в светлой и тёмной теме.
+6. В Double Commander повторите проверку в режиме Quick View.
+7. Повторите проверку в светлой и тёмной теме.
 
 ## Заголовки
 
@@ -106,7 +108,7 @@ var document = new FlowDocument
 ### PowerShell
 
 ```powershell
-$package = 'dist\MarkdownView-2.9.1.zip'
+$package = 'dist\MarkdownView-2.9.2.zip'
 Get-FileHash -Algorithm SHA256 -LiteralPath $package
 ```
 

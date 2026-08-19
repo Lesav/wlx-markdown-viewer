@@ -3,9 +3,8 @@ EXPORTS
   ListLoadW
   ListLoadNext
   ListLoadNextW
-  ListPrint
-  ListPrintW
   ListSendCommand
   ListCloseWindow
   ListSearchText
   ListSearchTextW
+  ListGetDetectString

@@ -4,7 +4,7 @@ setlocal EnableExtensions
 
 cd /d "%~dp0"
 
-set "VERSION=2.9.1"
+set "VERSION=2.9.2"
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 set "RESTORE_SOURCES=https://api.nuget.org/v3/index.json"
 
