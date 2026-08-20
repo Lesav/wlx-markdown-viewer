@@ -1,9 +1,12 @@
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Markdig;
@@ -33,8 +36,20 @@ internal sealed class FlowDocumentRenderer
     private readonly Brush _heading;
     private readonly Brush _muted;
     private readonly Brush _panel;
+    private readonly Brush _codePanel;
     private readonly Brush _border;
     private readonly Brush _link;
+    private readonly Brush _syntaxKeyword;
+    private readonly Brush _syntaxString;
+    private readonly Brush _syntaxComment;
+    private readonly Brush _syntaxNumber;
+    private readonly Brush _syntaxLiteral;
+    private readonly Brush _syntaxVariable;
+    private readonly Brush _syntaxCommand;
+    private readonly Brush _codeCopyForeground;
+    private readonly Brush _codeCopySuccess;
+    private readonly Brush _codeCopyFailure;
+    private readonly Style _codeCopyButtonStyle;
 
     internal FlowDocumentRenderer(string fileName, string extensions, bool dark)
     {
@@ -50,8 +65,24 @@ internal sealed class FlowDocumentRenderer
         _heading = MarkdownTheme.Brush(dark ? MarkdownTheme.DarkHeading : MarkdownTheme.LightHeading);
         _muted = MarkdownTheme.Brush(dark ? MarkdownTheme.DarkMuted : MarkdownTheme.LightMuted);
         _panel = MarkdownTheme.Brush(dark ? MarkdownTheme.DarkPanel : MarkdownTheme.LightPanel);
+        _codePanel = MarkdownTheme.Brush(dark ? MarkdownTheme.DarkPanel : MarkdownTheme.LightCodePanel);
         _border = MarkdownTheme.Brush(dark ? MarkdownTheme.DarkBorder : MarkdownTheme.LightBorder);
         _link = MarkdownTheme.Brush(dark ? MarkdownTheme.DarkLink : MarkdownTheme.LightLink);
+        _syntaxKeyword = MarkdownTheme.Brush(dark ? MarkdownTheme.DarkSyntaxKeyword : MarkdownTheme.LightSyntaxKeyword);
+        _syntaxString = MarkdownTheme.Brush(dark ? MarkdownTheme.DarkSyntaxString : MarkdownTheme.LightSyntaxString);
+        _syntaxComment = MarkdownTheme.Brush(dark ? MarkdownTheme.DarkSyntaxComment : MarkdownTheme.LightSyntaxComment);
+        _syntaxNumber = MarkdownTheme.Brush(dark ? MarkdownTheme.DarkSyntaxNumber : MarkdownTheme.LightSyntaxNumber);
+        _syntaxLiteral = MarkdownTheme.Brush(dark ? MarkdownTheme.DarkSyntaxLiteral : MarkdownTheme.LightSyntaxLiteral);
+        _syntaxVariable = MarkdownTheme.Brush(dark ? MarkdownTheme.DarkSyntaxVariable : MarkdownTheme.LightSyntaxVariable);
+        _syntaxCommand = MarkdownTheme.Brush(dark ? MarkdownTheme.DarkSyntaxCommand : MarkdownTheme.LightSyntaxCommand);
+        _codeCopyForeground = MarkdownTheme.Brush(MarkdownTheme.CodeCopyForeground);
+        _codeCopySuccess = MarkdownTheme.Brush(MarkdownTheme.CodeCopySuccess);
+        _codeCopyFailure = MarkdownTheme.Brush(MarkdownTheme.CodeCopyFailure);
+        _codeCopyButtonStyle = CreateCodeCopyButtonStyle(
+            MarkdownTheme.Brush(dark ? MarkdownTheme.DarkCodeCopyBackground : MarkdownTheme.LightCodeCopyBackground),
+            MarkdownTheme.Brush(dark ? MarkdownTheme.DarkCodeCopyHover : MarkdownTheme.LightCodeCopyHover),
+            MarkdownTheme.Brush(dark ? MarkdownTheme.DarkCodeCopyBorder : MarkdownTheme.LightCodeCopyBorder),
+            _codeCopyForeground);
     }
 
     internal FlowDocument Render(string markdown)
@@ -84,6 +115,9 @@ internal sealed class FlowDocumentRenderer
                 return;
             case FencedCodeBlock fenced when IsMermaid(fenced.Info):
                 target.Add(CreateMermaid(fenced.Lines.ToString()));
+                return;
+            case FencedCodeBlock fenced:
+                target.Add(CreateCodeBlock(fenced.Lines.ToString(), fenced.Info));
                 return;
             case CodeBlock code:
                 target.Add(CreateCodeBlock(code.Lines.ToString()));
@@ -190,7 +224,8 @@ internal sealed class FlowDocumentRenderer
                     target.Add(new Run(entity.Transcoded.ToString()));
                     break;
                 case TaskList task:
-                    target.Add(new Run(task.Checked ? "☑ " : "☐ ") { Foreground = _muted });
+                    target.Add(CreateTaskCheckbox(task.Checked));
+                    target.Add(new Run(" "));
                     break;
                 case ContainerInline container:
                     AppendInlines(target, container.FirstChild);
@@ -203,27 +238,202 @@ internal sealed class FlowDocumentRenderer
         }
     }
 
-    private System.Windows.Documents.Block CreateCodeBlock(string code)
+    private InlineUIContainer CreateTaskCheckbox(bool isChecked)
     {
+        var box = new Border
+        {
+            Width = 15,
+            Height = 15,
+            BorderBrush = _muted,
+            BorderThickness = new Thickness(1.25),
+            CornerRadius = new CornerRadius(2),
+            Background = isChecked ? _muted : Brushes.Transparent,
+            SnapsToDevicePixels = true,
+        };
+        if (isChecked)
+        {
+            box.Child = new System.Windows.Shapes.Path
+            {
+                Data = Geometry.Parse("M 2,5 L 5,8 L 11,1"),
+                Width = 9,
+                Height = 7,
+                Stretch = Stretch.Fill,
+                Stroke = Brushes.White,
+                StrokeThickness = 1.8,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                StrokeLineJoin = PenLineJoin.Round,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                IsHitTestVisible = false,
+            };
+        }
+        return new InlineUIContainer(box) { BaselineAlignment = BaselineAlignment.Center };
+    }
+
+    private System.Windows.Documents.Block CreateCodeBlock(string code, string? language = null)
+    {
+        var source = code.TrimEnd('\r', '\n');
         var text = new TextBlock
         {
-            Text = code.TrimEnd('\r', '\n'),
             FontFamily = new FontFamily("Consolas"),
             FontSize = 13,
             Foreground = _foreground,
             TextWrapping = TextWrapping.Wrap,
-            Padding = new Thickness(12),
+            Padding = new Thickness(12, 12, 48, 12),
         };
+        if (SyntaxHighlighter.TryTokenize(source, language, out var tokens))
+        {
+            foreach (var token in tokens)
+                text.Inlines.Add(new Run(token.Text) { Foreground = SyntaxBrush(token.Kind) });
+        }
+        else
+        {
+            text.Text = source;
+        }
+
+        var content = new Grid { ClipToBounds = true };
+        content.Children.Add(text);
+        content.Children.Add(CreateCodeCopyButton(source));
+
         return new BlockUIContainer(new Border
         {
-            Child = text,
-            Background = _panel,
+            Child = content,
+            Background = _codePanel,
             BorderBrush = _border,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(4),
             Margin = new Thickness(0, 5, 0, 10),
         });
     }
+
+    private Button CreateCodeCopyButton(string source)
+    {
+        var button = new Button
+        {
+            Width = 28,
+            Height = 28,
+            Margin = new Thickness(0, 5, 5, 0),
+            Padding = new Thickness(0),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Focusable = false,
+            IsTabStop = false,
+            Cursor = Cursors.Hand,
+            ToolTip = "Скопировать код в буфер обмена",
+            Style = _codeCopyButtonStyle,
+            Content = CreateCopyGlyph(),
+        };
+        button.Click += async (_, _) => await CopyCodeAsync(button, source);
+        return button;
+    }
+
+    private Style CreateCodeCopyButtonStyle(Brush background, Brush hover, Brush border, Brush foreground)
+    {
+        var style = new Style(typeof(Button));
+        style.Setters.Add(new Setter(Control.BackgroundProperty, background));
+        style.Setters.Add(new Setter(Control.ForegroundProperty, foreground));
+        style.Setters.Add(new Setter(Control.BorderBrushProperty, border));
+        style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
+        style.Setters.Add(new Setter(UIElement.OpacityProperty, 0.82));
+
+        var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+        hoverTrigger.Setters.Add(new Setter(Control.BackgroundProperty, hover));
+        hoverTrigger.Setters.Add(new Setter(UIElement.OpacityProperty, 1.0));
+        style.Triggers.Add(hoverTrigger);
+
+        var pressedTrigger = new Trigger { Property = Button.IsPressedProperty, Value = true };
+        pressedTrigger.Setters.Add(new Setter(UIElement.OpacityProperty, 0.68));
+        style.Triggers.Add(pressedTrigger);
+        return style;
+    }
+
+    private Grid CreateCopyGlyph()
+    {
+        var glyph = new Grid { Width = 14, Height = 14, IsHitTestVisible = false };
+        glyph.Children.Add(new Border
+        {
+            Width = 9,
+            Height = 9,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            BorderBrush = _codeCopyForeground,
+            BorderThickness = new Thickness(1.5),
+        });
+        glyph.Children.Add(new Border
+        {
+            Width = 9,
+            Height = 9,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            BorderBrush = _codeCopyForeground,
+            BorderThickness = new Thickness(1.5),
+            Background = _dark ? MarkdownTheme.Brush(MarkdownTheme.DarkCodeCopyBackground) :
+                MarkdownTheme.Brush(MarkdownTheme.LightCodeCopyBackground),
+        });
+        return glyph;
+    }
+
+    private async Task CopyCodeAsync(Button button, string source)
+    {
+        var copied = await TrySetClipboardTextAsync(source);
+        var operation = (button.Tag as int? ?? 0) + 1;
+        button.Tag = operation;
+        button.Background = copied ? _codeCopySuccess : _codeCopyFailure;
+        button.Content = new TextBlock
+        {
+            Text = copied ? "✓" : "!",
+            FontFamily = new FontFamily("Segoe UI Symbol"),
+            FontSize = 17,
+            FontWeight = FontWeights.Bold,
+            Foreground = _codeCopyForeground,
+            IsHitTestVisible = false,
+        };
+        button.ToolTip = copied ? "Код скопирован" : "Не удалось скопировать код";
+
+        await Task.Delay(2000);
+        if (!Equals(button.Tag, operation))
+            return;
+        button.ClearValue(Control.BackgroundProperty);
+        button.Content = CreateCopyGlyph();
+        button.ToolTip = "Скопировать код в буфер обмена";
+    }
+
+    private static async Task<bool> TrySetClipboardTextAsync(string source)
+    {
+        const int attempts = 5;
+        for (var attempt = 0; attempt < attempts; attempt++)
+        {
+            try
+            {
+                Clipboard.SetDataObject(source, true);
+                return true;
+            }
+            catch (ExternalException) when (attempt + 1 < attempts)
+            {
+                await Task.Delay(40);
+            }
+            catch (ExternalException)
+            {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private Brush SyntaxBrush(SyntaxTokenKind kind) => kind switch
+    {
+        SyntaxTokenKind.Keyword => _syntaxKeyword,
+        SyntaxTokenKind.String => _syntaxString,
+        SyntaxTokenKind.Comment => _syntaxComment,
+        SyntaxTokenKind.Number => _syntaxNumber,
+        SyntaxTokenKind.Literal => _syntaxLiteral,
+        SyntaxTokenKind.Variable => _syntaxVariable,
+        SyntaxTokenKind.Command => _syntaxCommand,
+        _ => _foreground,
+    };
 
     private System.Windows.Documents.Block CreateMermaid(string source)
     {

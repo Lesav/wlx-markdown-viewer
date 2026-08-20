@@ -4,8 +4,8 @@ LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
 #pragma code_page(1251)
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 2,9,3,0
- PRODUCTVERSION 2,9,3,0
+ FILEVERSION 2,9,4,0
+ PRODUCTVERSION 2,9,4,0
  FILEFLAGSMASK 0x17L
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -21,7 +21,7 @@ BEGIN
         BLOCK "000004b0"
         BEGIN
             VALUE "FileDescription", "Markdown lister plugin for Total/Double Commander"
-            VALUE "FileVersion", "2.9.3.0"
+            VALUE "FileVersion", "2.9.4.0"
             VALUE "InternalName", "MarkdownView"
 #ifdef _WIN64
             VALUE "OriginalFilename", "MarkdownView.wlx64"
@@ -29,7 +29,7 @@ BEGIN
             VALUE "OriginalFilename", "MarkdownView.wlx"
 #endif
             VALUE "ProductName", "MarkdownView"
-            VALUE "ProductVersion", "2.9.3.0"
+            VALUE "ProductVersion", "2.9.4.0"
         END
     END
     BLOCK "VarFileInfo"

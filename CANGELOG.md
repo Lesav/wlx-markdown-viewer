@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.9.4 - 2026-08-20
+
+- Added dependency-free syntax highlighting for fenced JavaScript, Bash/Shell, SQL, CMD/Batch,
+  PowerShell and HTML/XML/SVG blocks.
+- Added common language aliases and high-contrast token colors for light and dark themes.
+- Added highlighting safety limits with plain-text fallback for unknown languages and large blocks.
+- Added a copy button to every regular code block. It copies the original source without syntax
+  highlighting markup and shows temporary success or failure feedback.
+- Added clipboard retry handling for cases where another Windows application temporarily owns the
+  clipboard.
+- Darkened the light-theme code-block background without changing tables, quotes or inline code.
+- Replaced task-list checkbox font glyphs with WPF vector controls so unchecked boxes remain visible
+  regardless of the selected font.
+
 ## 2.9.3 - 2026-08-19
 
 - Made package signing conditional: `BuildMakeSetup.bat` now creates an unsigned package when the

@@ -1,4 +1,4 @@
-# MarkdownView 2.9.3 — тестовый документ
+# MarkdownView 2.9.4 — тестовый документ
 
 Этот файл проверяет основные возможности WLX-плагина MarkdownView для Total Commander
 и Double Commander под Windows.
@@ -10,10 +10,15 @@ WebView2, Internet Explorer, JavaScript, PHP и сетевой браузерн�
 1. Откройте `TEST.md` в Total Commander или Double Commander клавишей **F3**.
 2. Убедитесь, что документ появляется без пустого промежуточного окна.
 3. Проверьте выделение и копирование текста.
-4. Выполните поиск через Lister и повторите поиск вперёд и назад.
-5. Нажмите **Esc** — окно Lister должно закрыться.
-6. В Double Commander повторите проверку в режиме Quick View.
-7. Повторите проверку в светлой и тёмной теме.
+4. Нажмите кнопку копирования в правом верхнем углу любого блока кода. В буфер должен попасть
+   исходный код без ограждения и имени языка, а кнопка на две секунды должна показать галочку.
+5. После нажатия кнопки копирования нажмите **Esc** — окно Lister должно закрыться.
+6. Выполните поиск через Lister и повторите поиск вперёд и назад.
+7. В Double Commander повторите проверку в режиме Quick View.
+8. Повторите проверку в светлой и тёмной теме.
+9. В разделе «Блоки кода» проверьте разные цвета комментариев, строк, ключевых слов,
+   чисел, литералов, переменных, операторов и команд PowerShell.
+10. В разделе «Список задач» убедитесь, что видны как отмеченные, так и пустые checkbox.
 
 ## Заголовки
 
@@ -108,15 +113,72 @@ var document = new FlowDocument
 ### PowerShell
 
 ```powershell
-$package = 'dist\MarkdownView-2.9.3.zip'
-Get-FileHash -Algorithm SHA256 -LiteralPath $package
+# Комментарий
+$package = 'dist\MarkdownView-2.9.4.zip'
+$exists = $true
+if ($exists -and (Test-Path -LiteralPath $package)) {
+    Get-FileHash -Algorithm SHA256 -LiteralPath $package
+}
 ```
 
 ### CMD
 
 ```batch
 @echo off
-call BuildMakeSetup.bat
+rem Комментарий CMD
+set "PACKAGE=dist\MarkdownView-2.9.4.zip"
+if exist "%PACKAGE%" call BuildMakeSetup.bat
+```
+
+### Bash/Shell
+
+```zsh
+#!/usr/bin/env bash
+# Комментарий оболочки
+package="dist/MarkdownView-2.9.4.zip"
+if [[ -f "$package" ]]; then
+    printf 'Package: %s\n' "$package"
+fi
+```
+
+### JavaScript
+
+```nodejs
+// Однострочный комментарий
+const version = "2.9.4";
+const enabled = true;
+if (enabled) {
+    console.log(`MarkdownView ${version}`, 293);
+}
+```
+
+### SQL
+
+Псевдонимы `mysql`, `postgres`, `postgresql`, `pgsql`, `sqlite`, `tsql`, `mssql` и `plsql`
+должны использовать ту же SQL-подсветку.
+
+```postgresql
+-- SQL-комментарий
+SELECT plugin_name, version
+FROM plugins
+WHERE enabled = TRUE AND deleted_at IS NULL
+ORDER BY version DESC
+LIMIT 10;
+```
+
+### HTML/XML/SVG
+
+```html
+<!-- HTML-комментарий -->
+<section class="plugin" data-version="2.9.4">
+    <strong>MarkdownView &amp; WPF</strong>
+</section>
+```
+
+```svg
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 30">
+    <text x="5" y="20">MarkdownView</text>
+</svg>
 ```
 
 Блок с отступом:

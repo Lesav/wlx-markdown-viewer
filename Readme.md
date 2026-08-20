@@ -1,15 +1,15 @@
 # Markdown Lister Plugin for Total Commander and Double Commander (32/64-bit)
 
-Current release: **2.9.3**.
+Current release: **2.9.4**.
 
 MarkdownView is based on the [wlx-markdown-viewer plugin](https://github.com/rg-software/wlx-markdown-viewer).
 Markdown files are parsed with [Markdig](https://github.com/xoofx/markdig) and displayed as a WPF
 `FlowDocument`.
 
 The Markdown viewer targets .NET Framework 4.8, which is included with supported Windows 10
-installations. It does not use WebView2, Internet Explorer, JavaScript or PHP, and it does not
-require a separately installed .NET/.NET Core runtime. All non-system DLLs are included in the
-plugin directory.
+installations. It does not use WebView2 or Internet Explorer and does not execute JavaScript or
+PHP. It does not require a separately installed .NET/.NET Core runtime. All non-system DLLs are
+included in the plugin directory.
 
 ## Markdown rendering
 
@@ -17,6 +17,27 @@ The WPF renderer supports headings, paragraphs, emphasis, links, fenced code, li
 tables, task lists, local images, selection, copy, Total Commander search and dark mode. Raw HTML
 inside Markdown is disabled. Relative images are restricted to the directory containing the
 Markdown file.
+
+Task-list checkboxes are drawn as WPF vector controls instead of font glyphs, so both checked and
+unchecked states remain visible in light and dark themes.
+
+Fenced code blocks are syntax-highlighted locally without external libraries. Supported languages
+and aliases are:
+
+- JavaScript: `js`, `javascript`, `node`, `nodejs`;
+- Bash/Shell: `bash`, `sh`, `shell`, `zsh`;
+- SQL: `sql`, `mysql`, `postgres`, `postgresql`, `pgsql`, `sqlite`, `tsql`, `mssql`, `plsql`;
+- CMD/Batch: `cmd`, `bat`, `batch`, `dos`;
+- PowerShell: `powershell`, `ps1`, `pwsh`;
+- markup: `html`, `htm`, `xhtml`, `xml`, `svg`.
+
+Comments, strings, keywords, numbers, literals, variables, operators and PowerShell commands use
+separate high-contrast colors in light and dark themes. Unknown languages and code blocks larger
+than the highlighting safety limit remain readable as plain monospaced text.
+
+Every regular code block has a button in its upper-right corner that copies the original code
+without Markdown fences, a language name or syntax-highlighting markup. A check mark confirms a
+successful copy; clipboard access is retried when another Windows application temporarily owns it.
 
 Fenced `mermaid` blocks are rendered locally to SVG by the bundled .NET Framework 4.8 port of
 [Mermaider](https://github.com/nullean/mermaider), then converted to WPF drawings by
@@ -91,5 +112,5 @@ restore. End users do not need these build tools or an additional runtime.
 ## Testing
 
 Open `TEST.md` with F3 in Total Commander or Double Commander to check Markdown rendering,
-Quick View, dark-theme contrast, selection, copy, search, local Mermaid diagrams and closing
-Lister with Esc.
+Quick View, task-list checkboxes, syntax highlighting, per-block code copying, theme contrast,
+selection, search, local Mermaid diagrams and closing Lister with Esc.
