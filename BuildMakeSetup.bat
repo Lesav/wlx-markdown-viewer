@@ -4,7 +4,7 @@ setlocal EnableExtensions
 
 cd /d "%~dp0"
 
-set "VERSION=2.9.4"
+set "VERSION=2.9.5"
 set "VSWHERE=%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 set "RESTORE_SOURCES=https://api.nuget.org/v3/index.json"
 
@@ -58,6 +58,8 @@ if errorlevel 1 exit /b 1
 call :CopyRequired "%~dp0CANGELOG.md" "%PACKAGE_DIR%\CANGELOG.md"
 if errorlevel 1 exit /b 1
 call :CopyRequired "%~dp0TEST.md" "%PACKAGE_DIR%\TEST.md"
+if errorlevel 1 exit /b 1
+call :CopyRequired "%~dp0MarkdownView-Unblock.cmd" "%PACKAGE_DIR%\MarkdownView-Unblock.cmd"
 if errorlevel 1 exit /b 1
 
 echo.

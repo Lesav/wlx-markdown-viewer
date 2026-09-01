@@ -1,6 +1,6 @@
 # Markdown Lister Plugin for Total Commander and Double Commander (32/64-bit)
 
-Current release: **2.9.4**.
+Current release: **2.9.5**.
 
 MarkdownView is based on the [wlx-markdown-viewer plugin](https://github.com/rg-software/wlx-markdown-viewer).
 Markdown files are parsed with [Markdig](https://github.com/xoofx/markdig) and displayed as a WPF
@@ -38,6 +38,11 @@ than the highlighting safety limit remain readable as plain monospaced text.
 Every regular code block has a button in its upper-right corner that copies the original code
 without Markdown fences, a language name or syntax-highlighting markup. A check mark confirms a
 successful copy; clipboard access is retried when another Windows application temporarily owns it.
+Code inside the block can also be selected with the mouse and copied normally.
+
+When the currently displayed Markdown file is saved or replaced by another application, the viewer
+automatically reloads it after a short debounce delay. Temporary sharing violations are retried
+without replacing the current document with an error page.
 
 Fenced `mermaid` blocks are rendered locally to SVG by the bundled .NET Framework 4.8 port of
 [Mermaider](https://github.com/nullean/mermaider), then converted to WPF drawings by
@@ -71,7 +76,9 @@ Configuration is stored in `MarkdownView.ini`:
 
 The combined archive contains `MarkdownView.wlx` for 32-bit Total Commander or Double Commander
 and `MarkdownView.wlx64` for their 64-bit editions on Windows. The archive also contains
-`TEST.md` for checking F3, Esc, search, themes and Markdown/Mermaid rendering after installation.
+`TEST.md` for checking F3, Esc, search, themes and Markdown/Mermaid rendering after installation,
+and `MarkdownView-Unblock.cmd` for removing Windows Internet security marks from trusted plugin
+files.
 
 ### Total Commander
 
@@ -96,6 +103,12 @@ directory beside the WLX files. This build is Windows-only because its renderer 
 from a directory named `MarkdownView`. Files that are still locked are renamed by appending
 `.drop`.
 
+If Windows reports renderer error `0x80131515` after installing a trusted downloaded package,
+close Commander, run `MarkdownView-Unblock.cmd` from the installed `MarkdownView` directory and
+restart Commander. The script recursively removes the Windows Internet-zone mark from the packaged
+files. Administrator privileges may be required when the plugin is installed in a protected
+directory.
+
 ## Building
 
 Run `BuildMakeSetup.bat` to restore dependencies, build x86 and x64 and create
@@ -103,7 +116,8 @@ Run `BuildMakeSetup.bat` to restore dependencies, build x86 and x64 and create
 configured code-signing certificates are available. If they are found, every unsigned PE file is
 Authenticode-signed; otherwise an unsigned package is created with a warning. The certificate
 thumbprints, store and `signtool.exe` path can be overridden through the environment for CI. All
-intermediate build outputs and package staging files are kept under `tmp\`.
+intermediate build outputs and package staging files are kept under `tmp\`. The package also
+includes the repository-root `MarkdownView-Unblock.cmd` helper.
 
 The build requires Visual Studio 2022 or Build Tools with the C++ workload, the .NET Framework 4.8
 targeting pack, a current .NET SDK for the SDK-style projects, and Internet access for NuGet

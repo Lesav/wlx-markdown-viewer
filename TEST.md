@@ -1,4 +1,4 @@
-# MarkdownView 2.9.4 — тестовый документ
+# MarkdownView 2.9.5 — тестовый документ
 
 Этот файл проверяет основные возможности WLX-плагина MarkdownView для Total Commander
 и Double Commander под Windows.
@@ -19,6 +19,12 @@ WebView2, Internet Explorer, JavaScript, PHP и сетевой браузерн�
 9. В разделе «Блоки кода» проверьте разные цвета комментариев, строк, ключевых слов,
    чисел, литералов, переменных, операторов и команд PowerShell.
 10. В разделе «Список задач» убедитесь, что видны как отмеченные, так и пустые checkbox.
+11. Выделите мышью часть текста внутри блока кода и скопируйте её через **Ctrl+C**.
+12. Не закрывая Lister, измените и сохраните `TEST.md` во внешнем редакторе — содержимое должно
+    автоматически обновиться после короткой задержки.
+13. Убедитесь, что установочный архив содержит `MarkdownView-Unblock.cmd`. Если Windows блокирует
+    DLL с ошибкой `0x80131515`, закройте Commander, запустите этот сценарий из каталога
+    установленного доверенного плагина и повторите проверку.
 
 ## Заголовки
 
@@ -114,7 +120,7 @@ var document = new FlowDocument
 
 ```powershell
 # Комментарий
-$package = 'dist\MarkdownView-2.9.4.zip'
+$package = 'dist\MarkdownView-2.9.5.zip'
 $exists = $true
 if ($exists -and (Test-Path -LiteralPath $package)) {
     Get-FileHash -Algorithm SHA256 -LiteralPath $package
@@ -126,7 +132,7 @@ if ($exists -and (Test-Path -LiteralPath $package)) {
 ```batch
 @echo off
 rem Комментарий CMD
-set "PACKAGE=dist\MarkdownView-2.9.4.zip"
+set "PACKAGE=dist\MarkdownView-2.9.5.zip"
 if exist "%PACKAGE%" call BuildMakeSetup.bat
 ```
 
@@ -135,7 +141,7 @@ if exist "%PACKAGE%" call BuildMakeSetup.bat
 ```zsh
 #!/usr/bin/env bash
 # Комментарий оболочки
-package="dist/MarkdownView-2.9.4.zip"
+package="dist/MarkdownView-2.9.5.zip"
 if [[ -f "$package" ]]; then
     printf 'Package: %s\n' "$package"
 fi
@@ -145,7 +151,7 @@ fi
 
 ```nodejs
 // Однострочный комментарий
-const version = "2.9.4";
+const version = "2.9.5";
 const enabled = true;
 if (enabled) {
     console.log(`MarkdownView ${version}`, 293);
@@ -170,7 +176,7 @@ LIMIT 10;
 
 ```html
 <!-- HTML-комментарий -->
-<section class="plugin" data-version="2.9.4">
+<section class="plugin" data-version="2.9.5">
     <strong>MarkdownView &amp; WPF</strong>
 </section>
 ```
@@ -194,6 +200,7 @@ LIMIT 10;
 | Markdown-x86/x64.dll | C++/CLI-мост | Да |
 | Markdown.Wpf.dll | WPF-рендерер | Да |
 | Mermaider.dll | Локальные Mermaid-диаграммы | Да |
+| MarkdownView-Unblock.cmd | Снятие Internet-zone меток | При ошибке 0x80131515 |
 | WebView2 Runtime | Браузерный движок | Нет |
 
 ## Mermaid

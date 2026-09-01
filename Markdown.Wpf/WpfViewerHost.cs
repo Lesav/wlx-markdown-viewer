@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Text;
+using System.Windows.Threading;
 
 namespace MarkdownView.Wpf;
 
@@ -51,14 +52,18 @@ public static class WpfViewerHost
     {
         if (!Views.TryGetValue(handle, out var state))
             return false;
+        state.StopWatching();
         try
         {
-            var source = File.ReadAllText(Path.GetFullPath(fileName));
-            ApplyTheme(state.Viewer, darkMode);
-            state.Viewer.Document = new FlowDocumentRenderer(fileName, extensions, darkMode).Render(source);
-            state.FileName = fileName;
+            state.FileName = Path.GetFullPath(fileName);
             state.Extensions = extensions;
             state.DarkMode = darkMode;
+            state.LastSourceText = null;
+            state.ConfigureWatcher();
+            var source = ReadSourceFile(state.FileName);
+            ApplyTheme(state.Viewer, darkMode);
+            state.Viewer.Document = new FlowDocumentRenderer(state.FileName, extensions, darkMode).Render(source);
+            state.LastSourceText = source;
             state.ResetSearch();
             return true;
         }
@@ -77,13 +82,27 @@ public static class WpfViewerHost
 
     public static void SelectAll(IntPtr handle)
     {
-        if (Views.TryGetValue(handle, out var state) && state.Viewer.Document is { } document)
+        if (!Views.TryGetValue(handle, out var state))
+            return;
+        if (FindFocusedCodeBox(state.Viewer) is { } codeBox)
+        {
+            codeBox.Selection.Select(codeBox.Document.ContentStart, codeBox.Document.ContentEnd);
+            return;
+        }
+        if (state.Viewer.Document is { } document)
             state.Viewer.Selection.Select(document.ContentStart, document.ContentEnd);
     }
 
     public static void Copy(IntPtr handle)
     {
-        if (Views.TryGetValue(handle, out var state) && !state.Viewer.Selection.IsEmpty)
+        if (!Views.TryGetValue(handle, out var state))
+            return;
+        if (FindFocusedCodeBox(state.Viewer) is { } codeBox && !codeBox.Selection.IsEmpty)
+        {
+            ApplicationCommands.Copy.Execute(null, codeBox);
+            return;
+        }
+        if (!state.Viewer.Selection.IsEmpty)
             ApplicationCommands.Copy.Execute(null, state.Viewer);
     }
 
@@ -145,6 +164,7 @@ public static class WpfViewerHost
         if (!Views.TryGetValue(handle, out var state))
             return;
         Views.Remove(handle);
+        state.Dispose();
         state.Source.RootVisual = null;
         state.Source.Dispose();
     }
@@ -187,6 +207,90 @@ public static class WpfViewerHost
         PostMessage(listerWindow, WmKeyDown, new IntPtr(VkEscape), IntPtr.Zero);
         PostMessage(listerWindow, WmKeyUp, new IntPtr(VkEscape), new IntPtr(unchecked((int)0xC0000000)));
         args.Handled = true;
+    }
+
+    private static RichTextBox? FindFocusedCodeBox(FlowDocumentScrollViewer viewer)
+    {
+        var current = Keyboard.FocusedElement as DependencyObject;
+        RichTextBox? candidate = null;
+        while (current is not null)
+        {
+            if (current is RichTextBox codeBox && codeBox.IsReadOnly)
+                candidate = codeBox;
+            if (ReferenceEquals(current, viewer))
+                return candidate;
+            current = current is Visual || current is System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(current)
+                : LogicalTreeHelper.GetParent(current);
+        }
+        return null;
+    }
+
+    private static string ReadSourceFile(string fileName)
+    {
+        using var stream = new FileStream(fileName, FileMode.Open, FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream, Encoding.UTF8, true);
+        return reader.ReadToEnd();
+    }
+
+    private static void ReloadChangedFile(ViewState state)
+    {
+        if (state.IsDisposed)
+            return;
+        try
+        {
+            var source = ReadSourceFile(state.FileName);
+            if (string.Equals(source, state.LastSourceText, StringComparison.Ordinal))
+            {
+                state.ReloadAttempts = 0;
+                return;
+            }
+
+            var scrollViewer = FindVisualChild<ScrollViewer>(state.Viewer);
+            var verticalOffset = scrollViewer?.VerticalOffset ?? 0;
+            ApplyTheme(state.Viewer, state.DarkMode);
+            state.Viewer.Document = new FlowDocumentRenderer(
+                state.FileName, state.Extensions, state.DarkMode).Render(source);
+            state.LastSourceText = source;
+            state.ResetSearch();
+            state.ReloadAttempts = 0;
+
+            if (scrollViewer is not null && verticalOffset > 0)
+            {
+                state.Viewer.Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+                {
+                    if (!state.IsDisposed)
+                        scrollViewer.ScrollToVerticalOffset(verticalOffset);
+                }));
+            }
+        }
+        catch (IOException)
+        {
+            state.RetryReload();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            state.RetryReload();
+        }
+        catch (Exception)
+        {
+            // Keep the last successfully rendered document for unexpected transient failures.
+            state.ReloadAttempts = 0;
+        }
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, index);
+            if (child is T match)
+                return match;
+            if (FindVisualChild<T>(child) is { } nested)
+                return nested;
+        }
+        return null;
     }
 
     private static FlowDocument ErrorDocument(Exception exception, bool darkMode)
@@ -278,8 +382,13 @@ public static class WpfViewerHost
     [DllImport("user32.dll")]
     private static extern bool PostMessage(IntPtr window, int message, IntPtr wParam, IntPtr lParam);
 
-    private sealed class ViewState
+    private sealed class ViewState : IDisposable
     {
+        private static readonly TimeSpan ReloadDelay = TimeSpan.FromMilliseconds(350);
+        private const int MaxReloadAttempts = 20;
+        private FileSystemWatcher? _watcher;
+        private readonly DispatcherTimer _reloadTimer;
+
         internal ViewState(HwndSource source, FlowDocumentScrollViewer viewer, IntPtr parentWindow,
             string fileName, string extensions, bool darkMode)
         {
@@ -289,6 +398,15 @@ public static class WpfViewerHost
             FileName = fileName;
             Extensions = extensions;
             DarkMode = darkMode;
+            _reloadTimer = new DispatcherTimer(DispatcherPriority.Background, viewer.Dispatcher)
+            {
+                Interval = ReloadDelay,
+            };
+            _reloadTimer.Tick += (_, _) =>
+            {
+                _reloadTimer.Stop();
+                ReloadChangedFile(this);
+            };
         }
 
         internal HwndSource Source { get; }
@@ -301,6 +419,90 @@ public static class WpfViewerHost
         internal int SearchFlags { get; set; }
         internal int LastMatchStart { get; set; } = -1;
         internal int LastMatchEnd { get; set; } = -1;
+        internal string? LastSourceText { get; set; }
+        internal int ReloadAttempts { get; set; }
+        internal bool IsDisposed { get; private set; }
+
+        internal void ConfigureWatcher()
+        {
+            StopWatching();
+            if (IsDisposed)
+                return;
+
+            var directory = Path.GetDirectoryName(FileName);
+            var leafName = Path.GetFileName(FileName);
+            if (string.IsNullOrEmpty(directory) || string.IsNullOrEmpty(leafName) ||
+                !Directory.Exists(directory))
+                return;
+
+            FileSystemWatcher? watcher = null;
+            try
+            {
+                watcher = new FileSystemWatcher(directory, leafName)
+                {
+                    NotifyFilter = NotifyFilters.FileName | NotifyFilters.CreationTime |
+                        NotifyFilters.LastWrite | NotifyFilters.Size,
+                    IncludeSubdirectories = false,
+                };
+                watcher.Changed += (_, _) => ScheduleReload();
+                watcher.Created += (_, _) => ScheduleReload();
+                watcher.Deleted += (_, _) => ScheduleReload();
+                watcher.Renamed += (_, _) => ScheduleReload();
+                watcher.Error += (_, _) => ScheduleReload();
+                watcher.EnableRaisingEvents = true;
+                _watcher = watcher;
+            }
+            catch (IOException)
+            {
+                watcher?.Dispose();
+            }
+            catch (UnauthorizedAccessException)
+            {
+                watcher?.Dispose();
+            }
+            catch (ArgumentException)
+            {
+                watcher?.Dispose();
+            }
+        }
+
+        private void ScheduleReload()
+        {
+            if (IsDisposed)
+                return;
+            try
+            {
+                Viewer.Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+                {
+                    if (IsDisposed)
+                        return;
+                    ReloadAttempts = 0;
+                    _reloadTimer.Stop();
+                    _reloadTimer.Interval = ReloadDelay;
+                    _reloadTimer.Start();
+                }));
+            }
+            catch (InvalidOperationException)
+            {
+                // The WPF dispatcher is already shutting down with the Lister window.
+            }
+        }
+
+        internal void RetryReload()
+        {
+            if (IsDisposed || ++ReloadAttempts >= MaxReloadAttempts)
+                return;
+            _reloadTimer.Stop();
+            _reloadTimer.Interval = ReloadDelay;
+            _reloadTimer.Start();
+        }
+
+        internal void StopWatching()
+        {
+            _reloadTimer.Stop();
+            _watcher?.Dispose();
+            _watcher = null;
+        }
 
         internal void ResetSearch()
         {
@@ -308,6 +510,14 @@ public static class WpfViewerHost
             SearchFlags = 0;
             LastMatchStart = -1;
             LastMatchEnd = -1;
+        }
+
+        public void Dispose()
+        {
+            if (IsDisposed)
+                return;
+            IsDisposed = true;
+            StopWatching();
         }
     }
 

@@ -274,23 +274,40 @@ internal sealed class FlowDocumentRenderer
     private System.Windows.Documents.Block CreateCodeBlock(string code, string? language = null)
     {
         var source = code.TrimEnd('\r', '\n');
-        var text = new TextBlock
+        var codeDocument = new FlowDocument
         {
             FontFamily = new FontFamily("Consolas"),
             FontSize = 13,
             Foreground = _foreground,
-            TextWrapping = TextWrapping.Wrap,
-            Padding = new Thickness(12, 12, 48, 12),
+            Background = Brushes.Transparent,
+            PagePadding = new Thickness(12, 12, 48, 12),
+            ColumnWidth = double.PositiveInfinity,
         };
+        var paragraph = new Paragraph { Margin = new Thickness(0) };
         if (SyntaxHighlighter.TryTokenize(source, language, out var tokens))
         {
             foreach (var token in tokens)
-                text.Inlines.Add(new Run(token.Text) { Foreground = SyntaxBrush(token.Kind) });
+                paragraph.Inlines.Add(new Run(token.Text) { Foreground = SyntaxBrush(token.Kind) });
         }
         else
         {
-            text.Text = source;
+            paragraph.Inlines.Add(new Run(source));
         }
+        codeDocument.Blocks.Add(paragraph);
+
+        var text = new RichTextBox(codeDocument)
+        {
+            IsReadOnly = true,
+            IsUndoEnabled = false,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(0),
+            Background = Brushes.Transparent,
+            Foreground = _foreground,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Cursor = Cursors.IBeam,
+        };
+        SpellCheck.SetIsEnabled(text, false);
 
         var content = new Grid { ClipToBounds = true };
         content.Children.Add(text);

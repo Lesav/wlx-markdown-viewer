@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.9.5 - 2026-09-01
+
+- Added debounced automatic reload when the Markdown file is changed, replaced or recreated by an
+  external application.
+- Kept the current document visible while an externally saved file is temporarily unavailable and
+  retried reads that collide with the writer.
+- Made syntax-highlighted code text selectable and copyable while retaining the per-block copy
+  button.
+- Added `MarkdownView-Unblock.cmd` to the installation archive for removing Windows Internet-zone
+  marks that can cause renderer error `0x80131515` on trusted downloaded plugin files.
+
 ## 2.9.4 - 2026-08-20
 
 - Added dependency-free syntax highlighting for fenced JavaScript, Bash/Shell, SQL, CMD/Batch,
