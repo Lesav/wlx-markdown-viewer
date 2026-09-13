@@ -55,20 +55,31 @@ public static class WpfViewerHost
         state.StopWatching();
         try
         {
-            state.FileName = Path.GetFullPath(fileName);
+            var fullFileName = Path.GetFullPath(fileName);
+            var isNewDocument = !state.HasLoadedDocument ||
+                !string.Equals(state.FileName, fullFileName, StringComparison.OrdinalIgnoreCase);
+            if (state.HasLoadedDocument && isNewDocument)
+                state.SaveScrollPosition();
+
+            state.FileName = fullFileName;
             state.Extensions = extensions;
             state.DarkMode = darkMode;
             state.LastSourceText = null;
+            state.LoadGeneration++;
             state.ConfigureWatcher();
             var source = ReadSourceFile(state.FileName);
             ApplyTheme(state.Viewer, darkMode);
             state.Viewer.Document = new FlowDocumentRenderer(state.FileName, extensions, darkMode).Render(source);
             state.LastSourceText = source;
+            state.HasLoadedDocument = true;
             state.ResetSearch();
+            if (isNewDocument)
+                RestoreScrollPosition(state, state.LoadGeneration);
             return true;
         }
         catch (Exception exception)
         {
+            state.HasLoadedDocument = false;
             state.Viewer.Document = ErrorDocument(exception, darkMode);
             return false;
         }
@@ -247,16 +258,22 @@ public static class WpfViewerHost
                 return;
             }
 
+            var restoreSavedPosition = !state.HasLoadedDocument;
             var scrollViewer = FindVisualChild<ScrollViewer>(state.Viewer);
             var verticalOffset = scrollViewer?.VerticalOffset ?? 0;
             ApplyTheme(state.Viewer, state.DarkMode);
             state.Viewer.Document = new FlowDocumentRenderer(
                 state.FileName, state.Extensions, state.DarkMode).Render(source);
             state.LastSourceText = source;
+            state.HasLoadedDocument = true;
             state.ResetSearch();
             state.ReloadAttempts = 0;
 
-            if (scrollViewer is not null && verticalOffset > 0)
+            if (restoreSavedPosition)
+            {
+                RestoreScrollPosition(state, state.LoadGeneration);
+            }
+            else if (scrollViewer is not null && verticalOffset > 0)
             {
                 state.Viewer.Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
                 {
@@ -278,6 +295,21 @@ public static class WpfViewerHost
             // Keep the last successfully rendered document for unexpected transient failures.
             state.ReloadAttempts = 0;
         }
+    }
+
+    private static void RestoreScrollPosition(ViewState state, int loadGeneration)
+    {
+        var savedOffset = ScrollPositionStore.Load(state.FileName);
+        if (!savedOffset.HasValue || savedOffset.Value <= 0)
+            return;
+
+        state.Viewer.Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(() =>
+        {
+            if (state.IsDisposed || state.LoadGeneration != loadGeneration)
+                return;
+            state.Viewer.UpdateLayout();
+            FindVisualChild<ScrollViewer>(state.Viewer)?.ScrollToVerticalOffset(savedOffset.Value);
+        }));
     }
 
     private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
@@ -421,6 +453,8 @@ public static class WpfViewerHost
         internal int LastMatchEnd { get; set; } = -1;
         internal string? LastSourceText { get; set; }
         internal int ReloadAttempts { get; set; }
+        internal int LoadGeneration { get; set; }
+        internal bool HasLoadedDocument { get; set; }
         internal bool IsDisposed { get; private set; }
 
         internal void ConfigureWatcher()
@@ -512,10 +546,19 @@ public static class WpfViewerHost
             LastMatchEnd = -1;
         }
 
+        internal void SaveScrollPosition()
+        {
+            if (!HasLoadedDocument || string.IsNullOrEmpty(FileName))
+                return;
+            var verticalOffset = FindVisualChild<ScrollViewer>(Viewer)?.VerticalOffset ?? 0;
+            ScrollPositionStore.Save(FileName, verticalOffset);
+        }
+
         public void Dispose()
         {
             if (IsDisposed)
                 return;
+            SaveScrollPosition();
             IsDisposed = true;
             StopWatching();
         }

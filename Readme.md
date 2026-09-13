@@ -1,6 +1,6 @@
 # Markdown Lister Plugin for Total Commander and Double Commander (32/64-bit)
 
-Current release: **2.9.5**.
+Current release: **2.9.6**.
 
 MarkdownView is based on the [wlx-markdown-viewer plugin](https://github.com/rg-software/wlx-markdown-viewer).
 Markdown files are parsed with [Markdig](https://github.com/xoofx/markdig) and displayed as a WPF
@@ -43,6 +43,11 @@ Code inside the block can also be selected with the mouse and copied normally.
 When the currently displayed Markdown file is saved or replaced by another application, the viewer
 automatically reloads it after a short debounce delay. Temporary sharing violations are retried
 without replacing the current document with an error page.
+
+The vertical scroll position is saved when a document viewer closes and restored when the same
+Markdown file is opened again. Positions are associated with normalized full file paths under
+`HKCU\Software\MarkdownView\ScrollPositions`. The history is limited to 50 files; older entries are
+removed automatically.
 
 Fenced `mermaid` blocks are rendered locally to SVG by the bundled .NET Framework 4.8 port of
 [Mermaider](https://github.com/nullean/mermaider), then converted to WPF drawings by
@@ -127,4 +132,4 @@ restore. End users do not need these build tools or an additional runtime.
 
 Open `TEST.md` with F3 in Total Commander or Double Commander to check Markdown rendering,
 Quick View, task-list checkboxes, syntax highlighting, per-block code copying, theme contrast,
-selection, search, local Mermaid diagrams and closing Lister with Esc.
+selection, search, persistent scroll position, local Mermaid diagrams and closing Lister with Esc.
