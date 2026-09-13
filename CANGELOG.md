@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.10.0 - 2026-09-13
+
+- Added navigation to heading anchors, including URL-encoded Cyrillic anchors and deterministic
+  suffixes for duplicate headings.
+- Opened relative links to supported Markdown files inside the current viewer, including links to
+  an anchor in another document.
+- Added Back and Forward document history with `Alt+Left` and `Alt+Right` shortcuts.
+- Added a themed navigation bar that appears when Back or Forward history is available and shows
+  the target file and keyboard shortcut in each button tooltip.
+
 ## 2.9.6 - 2026-09-13
 
 - Saved each document's vertical scroll position in the current user's Windows registry when its

@@ -14,7 +14,7 @@ namespace
 constexpr wchar_t WindowClassName[] = L"MarkdownViewWpfHostWindow";
 constexpr wchar_t StateProperty[] = L"MarkdownView.WpfState";
 constexpr wchar_t ListerTitleMarker[] = L"(markdownview)";
-constexpr wchar_t VersionedListerTitle[] = L"(MarkdownView 2.9.6)";
+constexpr wchar_t VersionedListerTitle[] = L"(MarkdownView 2.10.0)";
 constexpr UINT UpdateListerTitleMessage = WM_APP + 0x296;
 constexpr wchar_t DefaultMarkdownExtensions[] =
     L"md;markdown;mdown;mdtext;mdtxt;mdwn;mk;mkd;mkdn;mkdown";

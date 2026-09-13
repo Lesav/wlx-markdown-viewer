@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
@@ -50,8 +51,14 @@ internal sealed class FlowDocumentRenderer
     private readonly Brush _codeCopySuccess;
     private readonly Brush _codeCopyFailure;
     private readonly Style _codeCopyButtonStyle;
+    private readonly Func<string, bool>? _navigateLink;
+    private readonly Dictionary<string, FrameworkContentElement> _anchors =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _anchorCounts =
+        new(StringComparer.OrdinalIgnoreCase);
 
-    internal FlowDocumentRenderer(string fileName, string extensions, bool dark)
+    internal FlowDocumentRenderer(string fileName, string extensions, bool dark,
+        Func<string, bool>? navigateLink = null)
     {
         _dark = dark;
         _baseDirectory = Path.GetDirectoryName(Path.GetFullPath(fileName)) ?? Environment.CurrentDirectory;
@@ -83,7 +90,10 @@ internal sealed class FlowDocumentRenderer
             MarkdownTheme.Brush(dark ? MarkdownTheme.DarkCodeCopyHover : MarkdownTheme.LightCodeCopyHover),
             MarkdownTheme.Brush(dark ? MarkdownTheme.DarkCodeCopyBorder : MarkdownTheme.LightCodeCopyBorder),
             _codeCopyForeground);
+        _navigateLink = navigateLink;
     }
+
+    internal IReadOnlyDictionary<string, FrameworkContentElement> Anchors => _anchors;
 
     internal FlowDocument Render(string markdown)
     {
@@ -162,7 +172,33 @@ internal sealed class FlowDocumentRenderer
             paragraph.BorderBrush = _border;
         if (heading.Level <= 2)
             paragraph.BorderThickness = new Thickness(0, 0, 0, 1);
+        RegisterHeadingAnchor(heading, paragraph);
         return paragraph;
+    }
+
+    private void RegisterHeadingAnchor(HeadingBlock heading, FrameworkContentElement target)
+    {
+        var baseAnchor = CreateAnchorSlug(CollectText(heading.Inline?.FirstChild));
+        if (string.IsNullOrEmpty(baseAnchor))
+            baseAnchor = "section";
+
+        _anchorCounts.TryGetValue(baseAnchor, out var duplicateIndex);
+        _anchorCounts[baseAnchor] = duplicateIndex + 1;
+        var anchor = duplicateIndex == 0 ? baseAnchor : $"{baseAnchor}-{duplicateIndex}";
+        _anchors[anchor] = target;
+    }
+
+    private static string CreateAnchorSlug(string headingText)
+    {
+        var result = new System.Text.StringBuilder(headingText.Length);
+        foreach (var character in headingText.Trim())
+        {
+            if (char.IsLetterOrDigit(character) || character == '_' || character == '-')
+                result.Append(char.ToLowerInvariant(character));
+            else if (char.IsWhiteSpace(character))
+                result.Append('-');
+        }
+        return result.ToString();
     }
 
     private Paragraph CreateParagraph(ContainerInline? inline)
@@ -666,9 +702,11 @@ internal sealed class FlowDocumentRenderer
         return result.ToString();
     }
 
-    private static void OpenLink(string? url)
+    private void OpenLink(string? url)
     {
         if (string.IsNullOrWhiteSpace(url))
+            return;
+        if (_navigateLink?.Invoke(url!) == true)
             return;
         try
         {

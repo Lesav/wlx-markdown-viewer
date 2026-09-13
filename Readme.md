@@ -1,6 +1,6 @@
 # Markdown Lister Plugin for Total Commander and Double Commander (32/64-bit)
 
-Current release: **2.9.6**.
+Current release: **2.10.0**.
 
 MarkdownView is based on the [wlx-markdown-viewer plugin](https://github.com/rg-software/wlx-markdown-viewer).
 Markdown files are parsed with [Markdig](https://github.com/xoofx/markdig) and displayed as a WPF
@@ -51,7 +51,17 @@ removed automatically according to their last-close time. Each entry records `Fi
 `VerticalOffset` and `LastClosedUtcTicks`. The current file is also saved before Commander reuses an
 existing Lister window for another document.
 
-In Total Commander, the Lister caption identifies the active build as `MarkdownView 2.9.6` while
+Links beginning with `#` navigate to headings inside the current document. Relative links to files
+with a supported Markdown extension open in the same viewer; `document.md#heading` opens the file
+and then its heading. Anchor generation supports Unicode text and duplicate headings. Absolute and
+non-Markdown links retain normal Windows shell handling.
+
+After an internal document or anchor transition, a themed navigation bar provides **Back** and
+**Forward** buttons. Their tooltips show the target file and the corresponding `Alt+Left` or
+`Alt+Right` shortcut. The bar is hidden when no history exists and remains available on the initial
+document while a forward transition is possible.
+
+In Total Commander, the Lister caption identifies the active build as `MarkdownView 2.10.0` while
 retaining the path supplied by the host. If a compatible host uses another caption format, the
 plugin leaves it unchanged. Only the `(markdownview)` marker in the host-controlled part of the
 caption is replaced; matching text inside a document path is not modified.
@@ -139,4 +149,5 @@ restore. End users do not need these build tools or an additional runtime.
 
 Open `TEST.md` with F3 in Total Commander or Double Commander to check Markdown rendering,
 Quick View, task-list checkboxes, syntax highlighting, per-block code copying, theme contrast,
-selection, search, persistent scroll position, local Mermaid diagrams and closing Lister with Esc.
+selection, search, anchor and relative-document navigation, persistent scroll position, local
+Mermaid diagrams and closing Lister with Esc.

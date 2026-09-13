@@ -1,4 +1,4 @@
-# MarkdownView 2.9.6 — тестовый документ
+# MarkdownView 2.10.0 — тестовый документ
 
 Этот файл проверяет основные возможности WLX-плагина MarkdownView для Total Commander
 и Double Commander под Windows.
@@ -29,9 +29,15 @@ WebView2, Internet Explorer, JavaScript, PHP и сетевой браузерн�
     сохранённая вертикальная позиция. Проверьте появление записи в
     `HKCU\Software\MarkdownView\ScrollPositions`. Позиции хранятся отдельно не более чем для 50
     файлов; при переполнении удаляются записи с самым старым временем закрытия.
-15. В Total Commander проверьте, что заголовок окна содержит `(MarkdownView 2.9.6)` и полный путь
+15. В Total Commander проверьте, что заголовок окна содержит `(MarkdownView 2.10.0)` и полный путь
     к открытому документу. Если `(markdownview)` встречается внутри пути, эта часть изменяться не
     должна.
+16. Нажмите ссылку «История версий» ниже. `CANGELOG.md` должен открыться в текущем окне, а над
+    документом должна появиться панель «Назад/Вперёд» с подсказками про **Alt+Left** и
+    **Alt+Right**.
+17. Вернитесь через **Alt+Left**, затем повторите переход через **Alt+Right**. После возврата на
+    стартовый документ панель должна оставаться видимой, пока доступен переход вперёд.
+18. Нажмите ссылку «Перейти к Mermaid» ниже и проверьте переход к разделу внутри текущего файла.
 
 ## Заголовки
 
@@ -73,6 +79,7 @@ Emoji из расширения Markdig: :white_check_mark: :warning: :rocket:
 - [История версий](CANGELOG.md)
 - [Происхождение Mermaider](ThirdParty/Mermaider/UPSTREAM.md)
 - [Внешняя тестовая ссылка](https://example.com)
+- [Перейти к Mermaid](#mermaid)
 
 ## Списки
 
@@ -127,7 +134,7 @@ var document = new FlowDocument
 
 ```powershell
 # Комментарий
-$package = 'dist\MarkdownView-2.9.6.zip'
+$package = 'dist\MarkdownView-2.10.0.zip'
 $exists = $true
 if ($exists -and (Test-Path -LiteralPath $package)) {
     Get-FileHash -Algorithm SHA256 -LiteralPath $package
@@ -139,7 +146,7 @@ if ($exists -and (Test-Path -LiteralPath $package)) {
 ```batch
 @echo off
 rem Комментарий CMD
-set "PACKAGE=dist\MarkdownView-2.9.6.zip"
+set "PACKAGE=dist\MarkdownView-2.10.0.zip"
 if exist "%PACKAGE%" call BuildMakeSetup.bat
 ```
 
@@ -148,7 +155,7 @@ if exist "%PACKAGE%" call BuildMakeSetup.bat
 ```zsh
 #!/usr/bin/env bash
 # Комментарий оболочки
-package="dist/MarkdownView-2.9.6.zip"
+package="dist/MarkdownView-2.10.0.zip"
 if [[ -f "$package" ]]; then
     printf 'Package: %s\n' "$package"
 fi
@@ -158,7 +165,7 @@ fi
 
 ```nodejs
 // Однострочный комментарий
-const version = "2.9.6";
+const version = "2.10.0";
 const enabled = true;
 if (enabled) {
     console.log(`MarkdownView ${version}`, 293);
@@ -183,7 +190,7 @@ LIMIT 10;
 
 ```html
 <!-- HTML-комментарий -->
-<section class="plugin" data-version="2.9.6">
+<section class="plugin" data-version="2.10.0">
     <strong>MarkdownView &amp; WPF</strong>
 </section>
 ```
