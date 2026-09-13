@@ -49,6 +49,10 @@ Markdown file is opened again. Positions are associated with normalized full fil
 `HKCU\Software\MarkdownView\ScrollPositions`. The history is limited to 50 files; older entries are
 removed automatically.
 
+In Total Commander, the Lister caption identifies the active build as `MarkdownView 2.9.6` while
+retaining the path supplied by the host. If a compatible host uses another caption format, the
+plugin leaves it unchanged.
+
 Fenced `mermaid` blocks are rendered locally to SVG by the bundled .NET Framework 4.8 port of
 [Mermaider](https://github.com/nullean/mermaider), then converted to WPF drawings by
 [SharpVectors](https://github.com/ElinamLLC/SharpVectors). No browser engine or network access is

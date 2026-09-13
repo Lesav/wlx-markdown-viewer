@@ -6,6 +6,8 @@
   viewer closes and restored it when the same Markdown file is opened again.
 - Limited scroll-position history to 50 files and removed the oldest entries when the limit is
   exceeded.
+- Added the plugin version to Total Commander's Lister title while preserving the document path and
+  the rest of the host-provided caption.
 
 ## 2.9.5 - 2026-09-01
 

@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <objbase.h>
 #include <algorithm>
+#include <cwchar>
 #include <cwctype>
 #include <string>
 #include <vector>
@@ -12,6 +13,9 @@ namespace
 {
 constexpr wchar_t WindowClassName[] = L"MarkdownViewWpfHostWindow";
 constexpr wchar_t StateProperty[] = L"MarkdownView.WpfState";
+constexpr wchar_t ListerTitleMarker[] = L"(markdownview)";
+constexpr wchar_t VersionedListerTitle[] = L"(MarkdownView 2.9.6)";
+constexpr UINT UpdateListerTitleMessage = WM_APP + 0x296;
 constexpr wchar_t DefaultMarkdownExtensions[] =
     L"md;markdown;mdown;mdtext;mdtxt;mdwn;mk;mkd;mkdn;mkdown";
 constexpr wchar_t DefaultRendererExtensions[] =
@@ -94,6 +98,39 @@ std::wstring Lower(std::wstring value)
     std::transform(value.begin(), value.end(), value.begin(),
         [](wchar_t character) { return static_cast<wchar_t>(towlower(character)); });
     return value;
+}
+
+void UpdateListerTitle(HWND lister_window)
+{
+    if(!lister_window || !IsWindow(lister_window))
+        return;
+
+    const int title_length = GetWindowTextLengthW(lister_window);
+    if(title_length <= 0)
+        return;
+
+    std::vector<wchar_t> buffer(static_cast<size_t>(title_length) + 1);
+    const int copied = GetWindowTextW(lister_window, buffer.data(),
+        static_cast<int>(buffer.size()));
+    if(copied <= 0)
+        return;
+
+    std::wstring title(buffer.data(), static_cast<size_t>(copied));
+    const std::wstring normalized = Lower(title);
+    const size_t marker = normalized.find(ListerTitleMarker);
+    const size_t file_separator = normalized.find(L" - [");
+    if(marker == std::wstring::npos || file_separator == std::wstring::npos ||
+        marker > file_separator)
+        return;
+
+    title.replace(marker, wcslen(ListerTitleMarker), VersionedListerTitle);
+    SetWindowTextW(lister_window, title.c_str());
+}
+
+void RefreshListerTitle(HWND plugin_window, HWND lister_window)
+{
+    UpdateListerTitle(lister_window);
+    PostMessageW(plugin_window, UpdateListerTitleMessage, 0, 0);
 }
 
 bool ExtensionListContains(const std::wstring& list, const std::wstring& extension)
@@ -295,6 +332,13 @@ LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lpa
                 markdown_focus_wpf_view(state->view_window);
             return 0;
         }
+        case UpdateListerTitleMessage:
+        {
+            MarkdownWpfState* state = GetState(window);
+            if(state)
+                UpdateListerTitle(state->lister_parent);
+            return 0;
+        }
         case WM_ERASEBKGND:
             return 1;
     }
@@ -314,6 +358,7 @@ int __stdcall ListLoadNextW(HWND parent_window, HWND plugin_window, WCHAR* filen
     state->filename = filename;
     state->lister_parent = parent_window;
     state->show_flags = show_flags;
+    RefreshListerTitle(plugin_window, parent_window);
     return LISTPLUGIN_OK;
 }
 
@@ -372,6 +417,7 @@ HWND __stdcall ListLoadW(HWND parent_window, WCHAR* filename, int show_flags)
     state->ole_initialized = true;
     SetPropW(plugin_window, StateProperty, state);
     ResizeView(plugin_window);
+    RefreshListerTitle(plugin_window, parent_window);
     return plugin_window;
 }
 
