@@ -3,7 +3,8 @@
 ## 2.9.6 - 2026-09-13
 
 - Saved each document's vertical scroll position in the current user's Windows registry when its
-  viewer closes and restored it when the same Markdown file is opened again.
+  viewer closes or Commander reuses the window for another file, and restored it when the same
+  Markdown file is opened again.
 - Limited scroll-position history to 50 files and removed the oldest entries when the limit is
   exceeded.
 - Added the plugin version to Total Commander's Lister title while preserving the document path and

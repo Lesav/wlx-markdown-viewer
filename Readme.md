@@ -47,11 +47,14 @@ without replacing the current document with an error page.
 The vertical scroll position is saved when a document viewer closes and restored when the same
 Markdown file is opened again. Positions are associated with normalized full file paths under
 `HKCU\Software\MarkdownView\ScrollPositions`. The history is limited to 50 files; older entries are
-removed automatically.
+removed automatically according to their last-close time. Each entry records `FilePath`,
+`VerticalOffset` and `LastClosedUtcTicks`. The current file is also saved before Commander reuses an
+existing Lister window for another document.
 
 In Total Commander, the Lister caption identifies the active build as `MarkdownView 2.9.6` while
 retaining the path supplied by the host. If a compatible host uses another caption format, the
-plugin leaves it unchanged.
+plugin leaves it unchanged. Only the `(markdownview)` marker in the host-controlled part of the
+caption is replaced; matching text inside a document path is not modified.
 
 Fenced `mermaid` blocks are rendered locally to SVG by the bundled .NET Framework 4.8 port of
 [Mermaider](https://github.com/nullean/mermaider), then converted to WPF drawings by
