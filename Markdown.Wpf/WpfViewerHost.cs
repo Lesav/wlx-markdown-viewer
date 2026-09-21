@@ -20,6 +20,9 @@ public static class WpfViewerHost
     private const int WmKeyDown = 0x0100;
     private const int WmKeyUp = 0x0101;
     private const int VkEscape = 0x1B;
+    private const double WheelScrollMultiplier = 1.5;
+    private const double ParagraphEdgeTolerance = 3.0;
+    private const double InitialParagraphAnchor = 48.0;
 
     private static readonly Dictionary<IntPtr, ViewState> Views = new();
     private static readonly IReadOnlyDictionary<string, FrameworkContentElement> EmptyAnchors =
@@ -51,6 +54,7 @@ public static class WpfViewerHost
             parentWindow, fileName, extensions, darkMode);
         source.RootVisual = root;
         viewer.PreviewKeyDown += (_, args) => HandlePreviewKey(state, args);
+        viewer.PreviewMouseWheel += (_, args) => HandlePreviewMouseWheel(state, args);
         backButton.Click += (_, _) => NavigateBack(state);
         forwardButton.Click += (_, _) => NavigateForward(state);
         Views[source.Handle] = state;
@@ -361,6 +365,99 @@ public static class WpfViewerHost
         PostMessage(listerWindow, WmKeyDown, new IntPtr(VkEscape), IntPtr.Zero);
         PostMessage(listerWindow, WmKeyUp, new IntPtr(VkEscape), new IntPtr(unchecked((int)0xC0000000)));
         args.Handled = true;
+    }
+
+    private static void HandlePreviewMouseWheel(ViewState state, MouseWheelEventArgs args)
+    {
+        if (state.IsDisposed || args.Delta == 0)
+            return;
+
+        var handled = (Keyboard.Modifiers & ModifierKeys.Alt) != 0
+            ? ScrollByParagraph(state, args.Delta > 0 ? -1 : 1)
+            : ScrollAccelerated(state, args.Delta);
+        if (handled)
+            args.Handled = true;
+    }
+
+    private static bool ScrollAccelerated(ViewState state, int wheelDelta)
+    {
+        var scrollViewer = FindVisualChild<ScrollViewer>(state.Viewer);
+        if (scrollViewer is null)
+            return false;
+
+        var targetOffset = scrollViewer.VerticalOffset - wheelDelta * WheelScrollMultiplier;
+        scrollViewer.ScrollToVerticalOffset(Math.Max(0,
+            Math.Min(scrollViewer.ScrollableHeight, targetOffset)));
+        return true;
+    }
+
+    private static bool ScrollByParagraph(ViewState state, int direction)
+    {
+        var document = state.Viewer.Document;
+        var scrollViewer = FindVisualChild<ScrollViewer>(state.Viewer);
+        if (document is null || scrollViewer is null || direction == 0)
+            return false;
+
+        state.Viewer.UpdateLayout();
+        var currentOffset = scrollViewer.VerticalOffset;
+        var targets = EnumerateParagraphTargets(document.Blocks)
+            .Select(target => GetBlockTop(target))
+            .Where(top => top.HasValue)
+            .Select(top => currentOffset + top!.Value)
+            .ToList();
+        if (targets.Count == 0)
+            return false;
+
+        var anchor = currentOffset + (currentOffset <= ParagraphEdgeTolerance
+            ? InitialParagraphAnchor
+            : ParagraphEdgeTolerance);
+        var currentIndex = targets.FindLastIndex(offset => offset <= anchor);
+        if (currentIndex < 0)
+            currentIndex = 0;
+        var destinationIndex = currentIndex + direction;
+        if (destinationIndex < 0)
+            scrollViewer.ScrollToTop();
+        else if (destinationIndex >= targets.Count)
+            scrollViewer.ScrollToEnd();
+        else
+            scrollViewer.ScrollToVerticalOffset(Math.Max(0,
+                Math.Min(scrollViewer.ScrollableHeight, targets[destinationIndex])));
+        return true;
+    }
+
+    private static IEnumerable<Block> EnumerateParagraphTargets(BlockCollection blocks)
+    {
+        foreach (var block in blocks)
+        {
+            switch (block)
+            {
+                case Section section:
+                    foreach (var child in EnumerateParagraphTargets(section.Blocks))
+                        yield return child;
+                    break;
+                case System.Windows.Documents.List list:
+                    foreach (var item in list.ListItems)
+                        foreach (var child in EnumerateParagraphTargets(item.Blocks))
+                            yield return child;
+                    break;
+                default:
+                    yield return block;
+                    break;
+            }
+        }
+    }
+
+    private static double? GetBlockTop(Block block)
+    {
+        try
+        {
+            var rectangle = block.ContentStart.GetCharacterRect(LogicalDirection.Forward);
+            return rectangle.IsEmpty ? null : rectangle.Top;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     private static bool HandleLink(ViewState state, string url)

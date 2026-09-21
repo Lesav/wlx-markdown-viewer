@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.10.1 - 2026-09-21
+
+- Increased the distance of regular mouse-wheel scrolling in the WPF viewer.
+- Added paragraph-by-paragraph scrolling while `Alt` is held during mouse-wheel input.
+
 ## 2.10.0 - 2026-09-13
 
 - Added navigation to heading anchors, including URL-encoded Cyrillic anchors and deterministic

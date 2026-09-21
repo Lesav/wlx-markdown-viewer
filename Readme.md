@@ -1,6 +1,6 @@
 # Markdown Lister Plugin for Total Commander and Double Commander (32/64-bit)
 
-Current release: **2.10.0**.
+Current release: **2.10.1**.
 
 MarkdownView is based on the [wlx-markdown-viewer plugin](https://github.com/rg-software/wlx-markdown-viewer).
 Markdown files are parsed with [Markdig](https://github.com/xoofx/markdig) and displayed as a WPF
@@ -51,6 +51,10 @@ removed automatically according to their last-close time. Each entry records `Fi
 `VerticalOffset` and `LastClosedUtcTicks`. The current file is also saved before Commander reuses an
 existing Lister window for another document.
 
+Mouse-wheel scrolling uses an increased step for faster reading through long documents. Hold
+`Alt` while rotating the wheel to move directly to the previous or next rendered paragraph or
+content block.
+
 Links beginning with `#` navigate to headings inside the current document. Relative links to files
 with a supported Markdown extension open in the same viewer; `document.md#heading` opens the file
 and then its heading. Anchor generation supports Unicode text and duplicate headings. Absolute and
@@ -61,7 +65,7 @@ After an internal document or anchor transition, a themed navigation bar provide
 `Alt+Right` shortcut. The bar is hidden when no history exists and remains available on the initial
 document while a forward transition is possible.
 
-In Total Commander, the Lister caption identifies the active build as `MarkdownView 2.10.0` while
+In Total Commander, the Lister caption identifies the active build as `MarkdownView 2.10.1` while
 retaining the path supplied by the host. If a compatible host uses another caption format, the
 plugin leaves it unchanged. Only the `(markdownview)` marker in the host-controlled part of the
 caption is replaced; matching text inside a document path is not modified.
